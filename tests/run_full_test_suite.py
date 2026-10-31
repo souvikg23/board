@@ -324,6 +324,76 @@ def test_palm_rejection():
 run_test("12. Stylus Palm Rejection", test_palm_rejection)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 12b: Line tool, Shift+drag, and snapping
+# ─────────────────────────────────────────────────────────────
+def test_line_tool():
+    js("Board.add();")                                  # a clean page for pixel checks
+    driver.find_element(By.ID, "line").click()
+    assert js("return Ink.mode;") == 'line', "Line button did not select the line tool"
+    stroke([(100, 300), (180, 360), (300, 304)])        # a wiggly path ending ~level with the start
+    s = js("return Ink.strokes.at(-1);")
+    assert len(s['p']) == 2, f"A line should keep only its two ends, has {len(s['p'])} points"
+    assert s['p'][1][1] == s['p'][0][1], f"Nearly-level line should snap level: {s['p']}"
+    assert alpha(200, 300) > 0, "No ink along the straight line"
+    assert alpha(180, 360) == 0, "The wiggle was drawn: the line is not straight"
+    press("l")
+    assert js("return Ink.mode;") == 'pen', "L should switch the line tool off again"
+    ActionChains(driver).key_down("\ue008").perform()   # hold Shift with the pen
+    stroke([(100, 500), (200, 560), (300, 600)])
+    ActionChains(driver).key_up("\ue008").perform()
+    s = js("return Ink.strokes.at(-1);")
+    assert len(s['p']) == 2, "Shift+drag should draw a straight line"
+
+run_test("12b. Line Tool and Shift+Drag", test_line_tool)
+
+# ─────────────────────────────────────────────────────────────
+# TEST 12c: Two people drawing at once; undo removes the right stroke
+# ─────────────────────────────────────────────────────────────
+def test_multi_touch():
+    n = js("return Ink.strokes.length;")
+    js("""
+      const cv = document.getElementById('ink'), r = cv.getBoundingClientRect();
+      const ev = (t, id, x, y) => cv.dispatchEvent(new PointerEvent(t, {pointerType: 'touch', pointerId: id, bubbles: true,
+        clientX: r.left + x, clientY: r.top + y}));
+      ev('pointerdown', 21, 100, 150); ev('pointerdown', 22, 600, 150);      // A and B start together
+      ev('pointermove', 21, 160, 160); ev('pointermove', 22, 660, 160);
+      ev('pointerup', 22, 660, 160); ev('pointerup', 21, 160, 160);          // B lifts first""")
+    assert js("return Ink.strokes.length;") == n + 2, "Two simultaneous fingers should draw two strokes"
+    js("Ink.undo();")                                   # A finished last, so undo removes A
+    left = js("return Ink.strokes.slice(-1)[0].p[0][0];")
+    assert js("return Ink.strokes.length;") == n + 1 and left == 600, f"Undo removed the wrong stroke (left starts at x={left})"
+    js("Ink.undo();")
+
+run_test("12c. Several People Drawing at Once", test_multi_touch)
+
+# ─────────────────────────────────────────────────────────────
+# TEST 12d: More menu and New board
+# ─────────────────────────────────────────────────────────────
+def test_menu_and_new_board():
+    menu = driver.find_element(By.ID, "more")
+    driver.find_element(By.ID, "more-btn").click()
+    assert menu.is_displayed(), "More menu did not open"
+    ActionChains(driver).move_to_element_with_offset(canvas(), 0, 0).click().perform()
+    assert not menu.is_displayed(), "Clicking the board should close the menu"
+    driver.find_element(By.ID, "more-btn").click()
+    press("\ue00c")                                     # Escape
+    assert not menu.is_displayed(), "Escape should close the menu"
+    pages = js("return BOARD.pages.length;")
+    js("window.confirm = () => false; Board.fresh();")
+    assert js("return BOARD.pages.length;") == pages, "Cancelling New board must keep the board"
+    before = len(os.listdir(DOWNLOADS))
+    driver.execute_async_script("const done = arguments[arguments.length - 1]; window.confirm = () => true; Board.fresh().then(done);")
+    assert js("return [BOARD.pages.length, Ink.strokes.length];") == [1, 0], "New board did not start fresh"
+    assert page_no() == "1 / 1", f"Page counter not reset: {page_no()}"
+    for _ in range(20):
+        if len(os.listdir(DOWNLOADS)) > before:
+            break
+        time.sleep(0.25)
+    assert len(os.listdir(DOWNLOADS)) > before, "The old board was not saved as a picture first"
+
+run_test("12d. More Menu and New Board", test_menu_and_new_board)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 13: Offline service worker
 # ─────────────────────────────────────────────────────────────
 def test_service_worker():
@@ -420,6 +490,20 @@ def test_help():
     js("Help.close();")
 
 run_test("17. Help Card", test_help)
+
+# ─────────────────────────────────────────────────────────────
+# TEST 18: Very large screens get thicker ink and a bigger toolbar
+# ─────────────────────────────────────────────────────────────
+def test_big_screen():
+    driver.set_window_size(2600, 1200); driver.refresh(); time.sleep(0.8)
+    try:
+        assert js("return BIG;") > 1, "4K-wide screen should get thicker ink"
+        assert js("return parseFloat(getComputedStyle(document.getElementById('bar')).zoom);") > 1, "Toolbar should be enlarged"
+    finally:
+        driver.set_window_size(1280, 800); driver.refresh(); time.sleep(0.8)
+    assert js("return BIG;") == 1, "Normal screens should keep normal ink"
+
+run_test("18. Large Smart-Board Screens", test_big_screen)
 
 # Leave the browser profile clean
 js("localStorage.clear();")

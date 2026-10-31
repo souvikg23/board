@@ -60,6 +60,10 @@ button.on{background:var(--new);color:var(--slate);border-color:var(--new)}
 #page-no{min-width:46px;text-align:center;font-weight:600}
 #clock{font-family:ui-monospace,monospace;min-width:80px}
 #full{color:var(--c3);font-weight:600}
+#more{position:fixed;right:12px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:210px;padding:8px;
+  background:var(--slate2);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#more button{text-align:left}
+#more.hidden{display:none}
 
 /* ── Welcome / help card ── */
 #help{max-width:620px;width:calc(100% - 32px);max-height:calc(100% - 32px);padding:26px 28px;
@@ -84,6 +88,8 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   .spacer,.sep{display:none}
   .tools{order:-1}
 }
+/* ── 4K smart boards: bigger toolbar for fingers (ink is thickened in app.js) ── */
+@media(min-width:2200px){#bar,#more{zoom:1.6}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -98,7 +104,6 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
       <span id="page-no">1 / 1</span>
       <button data-do="Board.next" title="Next page (→, Page Down)" aria-label="Next page">▶</button>
       <button data-do="Board.add" title="New page (N)">+ Page</button>
-      <button data-do="Board.remove" title="Delete this page" aria-label="Delete this page">✕</button>
     </div>
     <span class="sep"></span>
     <div class="grp tools">
@@ -114,27 +119,34 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
     </div>
     <div class="grp tools">
       <button id="pen" data-do="Ink.pen" title="Pen on / off (D). Off: touch and point without marking">✏️ Pen</button>
+      <button id="line" data-do="Ink.line" title="Straight lines (L). Or hold Shift while drawing">╱ Line</button>
       <button id="duster" data-do="Ink.duster" title="Duster (X)">Duster</button>
-      <button data-do="Ink.undo" title="Undo (Ctrl+Z)">Undo</button>
-      <button data-do="Ink.redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+      <button data-do="Ink.undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+      <button data-do="Ink.redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
       <button data-do="Ink.clear" title="Clear this page (C)">Clear</button>
     </div>
     <span class="spacer"></span>
     <div class="grp">
       <span id="full" class="hidden" title="This device's storage is full. Save your pages, then delete some.">⚠ Storage full</span>
-      <button id="bg" data-do="Bg.cycle" title="Background: plain, grid or lines (G)">Plain</button>
       <button id="clock" data-do="Clock.toggle" title="Start / pause the clock (T)">▶ 00:00</button>
       <button data-do="Clock.reset" title="Reset the clock" aria-label="Reset the clock">↺</button>
     </div>
     <span class="sep"></span>
     <div class="grp">
       <button data-do="Board.download" title="Save every page as one picture (S)">Save</button>
-      <button id="theme-btn" data-do="Theme.toggle" title="Chalkboard / whiteboard (W)">☀️ Light</button>
-      <button data-do="Board.fullscreen" title="Full screen (F)" aria-label="Full screen">⛶</button>
+      <button id="more-btn" data-do="Menu.toggle" title="More" aria-label="More options" aria-haspopup="true" aria-expanded="false">⋯</button>
       <button data-do="Help.open" title="Help (?)" aria-label="Help">?</button>
       <button id="install" class="hidden" data-do="App.install" title="Install Board on this device">⬇ Install</button>
     </div>
   </nav>
+</div>
+
+<div id="more" class="hidden" role="menu" aria-label="More options">
+  <button data-do="Board.fresh" title="The current board is saved as a picture first">New board</button>
+  <button data-do="Board.remove">Delete this page</button>
+  <button id="bg" data-do="Bg.cycle" title="Plain, grid or lines (G)">Background: Plain</button>
+  <button id="theme-btn" data-do="Theme.toggle" title="Chalkboard / whiteboard (W)">☀️ Whiteboard</button>
+  <button data-do="Board.fullscreen" title="Full screen (F)">⛶ Full screen</button>
 </div>
 
 <dialog id="help" aria-labelledby="help-title">
@@ -142,11 +154,12 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   <p class="lead">A blank board for teaching. Opens instantly, works without internet, no login.</p>
   <ol>
     <li><b>🖊️ Draw</b> with a mouse, stylus or finger. Pick a colour and a size; the duster rubs out.
-      Turn the pen off to point or rest your hand on the board without marking it.
-      Undo brings back anything, even a cleared page.</li>
+      Line draws straight lines. Turn the pen off to point at the board without marking it.
+      Several people can draw at once, and Undo brings back anything, even a cleared page.</li>
     <li><b>📄 Pages.</b> + Page gives you a fresh board. Flip with ◀ ▶, the arrow keys or a presentation clicker.
       Everything stays on this device, even if you close the tab.</li>
-    <li><b>💾 Save &amp; share.</b> Save turns every page into one picture, ready for WhatsApp or Teams.</li>
+    <li><b>💾 Save &amp; share.</b> Save turns every page into one picture, ready for WhatsApp or Teams.
+      New board starts fresh and saves the old one as a picture first.</li>
   </ol>
   <p class="small">Grid or ruled lines for maths · a lecture clock · chalkboard or whiteboard · install it as an app.</p>
   <details><summary>Keyboard shortcuts</summary>
@@ -154,6 +167,7 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
       <div><kbd>1</kbd>–<kbd>4</kbd> pen colour</div>
       <div><kbd>[</kbd> <kbd>]</kbd> thinner / thicker</div>
       <div><kbd>D</kbd> pen on / off · <kbd>X</kbd> duster</div>
+      <div><kbd>L</kbd> straight line · <kbd>Shift</kbd>+drag too</div>
       <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Shift+Z</kbd> redo</div>
       <div><kbd>C</kbd> clear page</div>
       <div><kbd>N</kbd> new page</div>
@@ -168,6 +182,6 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   </div>
 </dialog>
 
-<script src="app.js?v=ea944f91e0"></script>
+<script src="app.js?v=383882e96e"></script>
 </body>
 </html>

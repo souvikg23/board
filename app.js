@@ -15,6 +15,11 @@ const Store = {
    p = [[x, y], ...] in board pixels. Colours are stored by number, not hex, so that
    switching chalkboard ⇄ whiteboard re-inks everything in that theme's colours. */
 const SIZES = {pen: [3, 6, 12], duster: [20, 40, 80]};
+/* Very large screens (4K smart boards) get thicker ink and a bigger toolbar (see CSS). */
+const BIG = matchMedia('(min-width: 2200px)').matches ? 1.6 : 1;
+/* Straight lines snap level or upright when within ~6 degrees: tidy axes. */
+const snap = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1];
+  return Math.abs(dy) < Math.abs(dx) * 0.1 ? [b[0], a[1]] : Math.abs(dx) < Math.abs(dy) * 0.1 ? [a[0], b[1]] : b; };
 const isPt = q => Array.isArray(q) && q.length === 2 && Number.isFinite(q[0]) && Number.isFinite(q[1]);
 const cleanStroke = s => s && Number.isInteger(s.c) && s.c >= -1 && s.c <= 3 && Number.isInteger(s.s) && s.s >= 0 && s.s <= 2 &&
   Array.isArray(s.p) && s.p.length && s.p.every(isPt) ? {c: s.c, s: s.s, p: s.p} : null;
@@ -35,9 +40,10 @@ const savePrefs = () => Store.set('board.prefs', PREFS);
 
 /* ── Ink: drawing, duster, undo/redo ───────────────────────── */
 /* Undo history lives per page (keyed by the page itself), so it survives adding or deleting
-   other pages. Clear is an undoable action too. */
+   other pages. Clear is an undoable action too. Several fingers or pens can draw at once
+   (a teacher and a student at a smart board); each pointer has its own live stroke. */
 const HISTORY = new WeakMap();
-const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, cols: [], cv: null, g: null,
+const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [], cv: null, g: null,
   get strokes() { return BOARD.pages[BOARD.i]; },
   init() {
     this.cv = $('ink'); this.g = this.cv.getContext('2d');
@@ -49,21 +55,26 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
     const pos = e => { const r = this.cv.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
     this.cv.addEventListener('pointerdown', e => {
       if (e.pointerType === 'pen') this.penSeen = true;
-      if (this.mode === 'off' || this.cur || e.button > 0 || (e.pointerType === 'touch' && this.penSeen)) return;   // pen off; one stroke at a time; palm rejection
-      this.cur = {c: this.mode === 'duster' ? -1 : this.ci, s: this.si, p: [pos(e)]};
-      this.pid = e.pointerId;
-      this.strokes.push(this.cur);
-      this.paint(this.g, [this.cur]);
+      if (this.mode === 'off' || e.button > 0 || (e.pointerType === 'touch' && this.penSeen)) return;   // pen off; palm rejection
+      const s = {c: this.mode === 'duster' ? -1 : this.ci, s: this.si, p: [pos(e)]};
+      this.live.set(e.pointerId, {s, line: this.mode === 'line'});
+      this.strokes.push(s);
+      this.paint(this.g, [s]);
       try { this.cv.setPointerCapture(e.pointerId); } catch {}
     });
     this.cv.addEventListener('pointermove', e => {
-      if (!this.cur || e.pointerId !== this.pid) return;
-      for (const ev of e.getCoalescedEvents?.() || [e]) this.cur.p.push(pos(ev));   // every stylus sample, for smooth ink
-      this.paint(this.g, [this.cur]);
+      const l = this.live.get(e.pointerId); if (!l) return;
+      if (l.line || e.shiftKey) {                                   // straight line: start point to here
+        l.s.p = [l.s.p[0], snap(l.s.p[0], pos(e))]; this.redraw();
+      } else {
+        for (const ev of e.getCoalescedEvents?.() || [e]) l.s.p.push(pos(ev));   // every stylus sample, for smooth ink
+        this.paint(this.g, [l.s]);
+      }
     });
     const end = e => {
-      if (!this.cur || e.pointerId !== this.pid) return;
-      this.record({add: this.cur}); this.cur = null;
+      const l = this.live.get(e.pointerId); if (!l) return;
+      this.live.delete(e.pointerId);
+      this.record({add: l.s});
       this.changed();
     };
     this.cv.addEventListener('pointerup', end);
@@ -76,7 +87,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
       const p = s.p, last = p[p.length - 1];
       g.globalCompositeOperation = s.c < 0 ? 'destination-out' : 'source-over';
       g.strokeStyle = s.c < 0 ? '#000' : this.cols[s.c];
-      g.lineWidth = SIZES[s.c < 0 ? 'duster' : 'pen'][s.s];
+      g.lineWidth = SIZES[s.c < 0 ? 'duster' : 'pen'][s.s] * BIG;
       g.beginPath(); g.moveTo(p[0][0], p[0][1]);
       for (let j = 1; j < p.length - 1; j++) g.quadraticCurveTo(p[j][0], p[j][1], (p[j][0] + p[j + 1][0]) / 2, (p[j][1] + p[j + 1][1]) / 2);
       g.lineTo(last[0] + (p.length === 1 ? 0.01 : 0), last[1]);   // a single tap still leaves a dot
@@ -95,7 +106,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
   record(a) { const h = this._h(); h.back.push(a); h.fwd = []; },
   undo() {
     const h = this._h(), a = h.back.pop(); if (!a) return;
-    h.fwd.push(a); a.add ? this.strokes.pop() : this.strokes.push(...a.clear); this.changed();
+    h.fwd.push(a); a.add ? this.strokes.splice(this.strokes.lastIndexOf(a.add), 1) : this.strokes.push(...a.clear); this.changed();
   },
   redo() {
     const h = this._h(), a = h.fwd.pop(); if (!a) return;
@@ -105,6 +116,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
   /* tools */
   sync() {
     document.querySelectorAll('.sw').forEach((b, i) => b.classList.toggle('sel', this.mode !== 'duster' && i === this.ci));
+    $('line').classList.toggle('on', this.mode === 'line');
     document.querySelectorAll('.sz').forEach((b, i) => b.classList.toggle('on', i === this.si));
     $('pen').classList.toggle('on', this.mode === 'pen');
     $('pen').setAttribute('aria-pressed', this.mode === 'pen');
@@ -112,9 +124,10 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
     $('duster').classList.toggle('on', this.mode === 'duster');
     this.cv.classList.toggle('duster', this.mode === 'duster');
   },
-  pick(i) { this.ci = +i; this.mode = 'pen'; this.sync(); },
+  pick(i) { this.ci = +i; if (this.mode !== 'line') this.mode = 'pen'; this.sync(); },
   size(i) { this.si = Math.max(0, Math.min(2, +i)); this.sync(); },
   pen() { this.mode = this.mode === 'pen' ? 'off' : 'pen'; this.sync(); },   // off: touch and point without marking
+  line() { this.mode = this.mode === 'line' ? 'pen' : 'line'; this.sync(); },
   duster() { this.mode = this.mode === 'duster' ? 'pen' : 'duster'; this.sync(); }
 };
 
@@ -123,13 +136,20 @@ const Board = {
   save() { $('full').classList.toggle('hidden', Store.set('board.pages', BOARD)); },
   show() { $('page-no').textContent = `${BOARD.i + 1} / ${BOARD.pages.length}`; Ink.redraw(); },
   go(i) {
-    if (Ink.cur || !(i >= 0 && i < BOARD.pages.length)) return;
+    if (Ink.live.size || !(i >= 0 && i < BOARD.pages.length)) return;
     BOARD.i = i; this.save(); this.show();
   },
   prev() { this.go(BOARD.i - 1); },
   /* Moving on from the last page gives a fresh one, but never piles up empty pages. */
   next() { BOARD.i === BOARD.pages.length - 1 && Ink.strokes.length ? this.add() : this.go(BOARD.i + 1); },
-  add() { if (Ink.cur) return; BOARD.pages.splice(BOARD.i + 1, 0, []); this.go(BOARD.i + 1); },
+  add() { if (Ink.live.size) return; BOARD.pages.splice(BOARD.i + 1, 0, []); this.go(BOARD.i + 1); },
+  /* Start fresh. If the old board has any drawing, it is saved as a picture first. */
+  async fresh() {
+    if (Ink.live.size) return;
+    const inked = BOARD.pages.some(p => p.length);
+    if (inked && (!confirm('Start a new board? This one is saved as a picture first.') || !await this.download())) return;
+    BOARD = {pages: [[]], i: 0}; this.save(); this.show();
+  },
   remove() {
     if (BOARD.pages.length === 1) return Ink.clear();                       // undoable
     if (Ink.strokes.length && !confirm('Delete this page and its drawing?')) return;
@@ -161,11 +181,12 @@ const Board = {
     const name = `board-${d.toISOString().slice(0, 10)}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
     const file = new File([blob], name, {type: 'image/png'});
     if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({files: [file]})) {
-      try { return await navigator.share({files: [file]}); } catch (e) { if (e.name === 'AbortError') return; }
+      try { await navigator.share({files: [file]}); return true; } catch (e) { if (e.name === 'AbortError') return false; }
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    return true;
   },
   fullscreen() {
     (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())?.catch(() => {});
@@ -178,14 +199,14 @@ const Theme = {
     const dark = PREFS.theme === 'dark', css = getComputedStyle(document.documentElement);
     document.documentElement.dataset.theme = PREFS.theme;
     document.querySelector('meta[name="theme-color"]').content = dark ? '#1F2B26' : '#F5F3EE';
-    $('theme-btn').textContent = dark ? '☀️ Light' : '🌙 Dark';
+    $('theme-btn').textContent = dark ? '☀️ Whiteboard' : '🌙 Chalkboard';
     Ink.cols = [0, 1, 2, 3].map(i => css.getPropertyValue('--c' + i).trim());
     Ink.redraw();
   },
   toggle() { PREFS.theme = PREFS.theme === 'dark' ? 'light' : 'dark'; savePrefs(); this.apply(); }
 };
 const Bg = {
-  apply() { $('board').className = PREFS.bg === 'plain' ? '' : PREFS.bg; $('bg').textContent = PREFS.bg[0].toUpperCase() + PREFS.bg.slice(1); },
+  apply() { $('board').className = PREFS.bg === 'plain' ? '' : PREFS.bg; $('bg').textContent = 'Background: ' + PREFS.bg[0].toUpperCase() + PREFS.bg.slice(1); },
   cycle() { PREFS.bg = {plain: 'grid', grid: 'lines', lines: 'plain'}[PREFS.bg]; savePrefs(); this.apply(); }
 };
 
@@ -232,20 +253,34 @@ const Help = {
 };
 $('help').addEventListener('close', () => { PREFS.welcomed = 2; savePrefs(); });
 
+/* ── More menu: settings that don't need to sit on the toolbar ── */
+const Menu = {
+  toggle() {
+    const open = $('more').classList.toggle('hidden') === false;
+    $('more').style.bottom = $('bar').offsetHeight + 8 + 'px';          // just above the toolbar, however tall it is
+    $('more-btn').setAttribute('aria-expanded', open);
+  },
+  close() { $('more').classList.add('hidden'); $('more-btn').setAttribute('aria-expanded', false); }
+};
+
 /* ── Buttons and keys ──────────────────────────────────────── */
 /* Buttons carry data-do="Object.method" (and optional data-arg); no inline handlers,
    so the page can forbid inline script entirely. */
-const ACTIONS = {Board, Ink, Theme, Bg, Clock, App, Help};
+const ACTIONS = {Board, Ink, Theme, Bg, Clock, App, Help, Menu};
 const run = (act, arg) => { const [o, m] = act.split('.'); ACTIONS[o]?.[m]?.(arg); };
-document.addEventListener('click', e => { const el = e.target.closest('[data-do]'); if (el) run(el.dataset.do, el.dataset.arg); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('#more, #more-btn')) Menu.close();                // a click anywhere else closes the menu
+  const el = e.target.closest('[data-do]'); if (el) run(el.dataset.do, el.dataset.arg);
+});
 
 /* Presentation clickers send Page Up / Page Down or the arrow keys. */
 const KEYS = {arrowright: 'Board.next', pagedown: 'Board.next', arrowdown: 'Board.next',
   arrowleft: 'Board.prev', pageup: 'Board.prev', arrowup: 'Board.prev', n: 'Board.add',
-  d: 'Ink.pen', x: 'Ink.duster', e: 'Ink.duster', c: 'Ink.clear', g: 'Bg.cycle', t: 'Clock.toggle',
+  d: 'Ink.pen', l: 'Ink.line', x: 'Ink.duster', e: 'Ink.duster', c: 'Ink.clear', g: 'Bg.cycle', t: 'Clock.toggle',
   w: 'Theme.toggle', s: 'Board.download', f: 'Board.fullscreen', '?': 'Help.open'};
 document.addEventListener('keydown', e => {
   if ($('help').open) return;                    // the dialog handles its own keys (Esc closes)
+  if (e.key === 'Escape') return Menu.close();
   const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
   if (mod && k === 'z') { e.preventDefault(); return e.shiftKey ? Ink.redo() : Ink.undo(); }
   if (mod && k === 'y') { e.preventDefault(); return Ink.redo(); }

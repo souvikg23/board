@@ -6,11 +6,15 @@ Installs as an app on PC (Chrome, Edge, Brave) and phones (Android, iPhone, iPad
 **Live:** https://souvikg23.github.io/board/
 
 ## What it does
-- **Draw** with a mouse, stylus or finger: four colours, three sizes, a duster.
-  Undo/redo covers everything, even a cleared page. With a stylus, a resting palm doesn't draw.
+- **Draw** with a mouse, stylus or finger: four colours, three sizes, a duster, and a **Line** tool
+  (or Shift+drag) that snaps level/upright. **Pen** switches off so you can point without marking.
+  Several people can draw at once (smart boards). Undo/redo covers everything, even a cleared page.
+  With a stylus, a resting palm doesn't draw.
 - **Pages**: + Page for a fresh board; flip with ◀ ▶, the arrow keys or a presentation clicker
   (moving past the last page gives you a new one).
 - **Save & share**: Save turns every page into one picture (on phones it opens the Share sheet, e.g. WhatsApp).
+  **New board** (in the ⋯ menu) starts fresh and saves the old board as a picture first.
+- On 4K smart boards the toolbar and ink are scaled up automatically.
 - Plain, grid or ruled background · lecture clock · chalkboard or whiteboard
   (colours re-ink to suit, so white chalk never disappears on a whiteboard).
 - Your board stays on this device and survives closing the tab. Board asks the browser to keep that storage
