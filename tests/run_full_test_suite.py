@@ -95,7 +95,11 @@ def test_welcome_card():
     assert js("return document.getElementById('help').open;"), "Welcome card not shown on first visit"
     driver.find_element(By.CSS_SELECTOR, "#help [data-do='Help.close']").click()
     assert not js("return document.getElementById('help').open;"), "Welcome card did not close"
-    assert js("return JSON.parse(localStorage.getItem('board.prefs')).welcomed === 2;"), "Welcome not remembered"
+    for _ in range(20):                                 # the dialog's close event fires a moment later
+        if js("return JSON.parse(localStorage.getItem('board.prefs'))?.welcomed === 2;"):
+            break
+        time.sleep(0.05)
+    assert js("return JSON.parse(localStorage.getItem('board.prefs'))?.welcomed === 2;"), "Welcome not remembered"
 
 run_test("0. Welcome Card (first visit)", test_welcome_card)
 
