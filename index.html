@@ -27,12 +27,13 @@
 
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--slate);color:var(--chalk);
-  font:14px/1.4 system-ui,sans-serif;transition:background .3s,color .3s}
+  font:14px/1.4 system-ui,sans-serif;transition:background .3s,color .3s;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* iPhone: no selection or magnifier mid-stroke */
 .wrap{display:flex;flex-direction:column;height:100vh;height:100dvh}
 .hidden{display:none!important}
 
 /* ── Board ── */
-#board{position:relative;flex:1;min-height:0;background-color:var(--slate)}
+#board{position:relative;flex:1;min-height:0;background-color:var(--slate);touch-action:none}
 #board.grid{background-image:linear-gradient(var(--rule) 1px,transparent 1px),linear-gradient(90deg,var(--rule) 1px,transparent 1px);background-size:40px 40px}
 #board.lines{background-image:linear-gradient(var(--rule) 1px,transparent 1px);background-size:100% 40px}
 #ink{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
@@ -45,7 +46,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--slate);color:var
 .grp{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .sep{width:1px;height:26px;background:var(--border);margin:0 2px;flex-shrink:0}
 .spacer{flex:1}
-button{font:600 14px system-ui,sans-serif;background:transparent;color:var(--chalk);white-space:nowrap;
+button{font:600 14px system-ui,sans-serif;background:transparent;color:var(--chalk);white-space:nowrap;touch-action:manipulation;
   border:1px solid var(--btn-border);border-radius:6px;padding:7px 9px;cursor:pointer;
   transition:border-color .2s,color .2s,background .2s}
 button:hover,button:focus-visible{border-color:var(--new);color:var(--new);outline:none}
@@ -182,6 +183,6 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   </div>
 </dialog>
 
-<script src="app.js?v=383882e96e"></script>
+<script src="app.js?v=c83c247f5f"></script>
 </body>
 </html>

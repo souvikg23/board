@@ -77,8 +77,10 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
       this.record({add: l.s});
       this.changed();
     };
-    this.cv.addEventListener('pointerup', end);
-    this.cv.addEventListener('pointercancel', end);
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) this.cv.addEventListener(t, end);
+    /* iPhone/iPad: claim every touch on the board, so long rubs with the duster never turn into
+       text selection, the magnifier or a page gesture that steals the following touches. */
+    for (const t of ['touchstart', 'touchmove']) this.cv.addEventListener(t, e => e.preventDefault(), {passive: false});
   },
   /* Draw strokes onto any 2D context. Points are joined with curves through their midpoints. */
   paint(g, strokes) {

@@ -394,6 +394,30 @@ def test_menu_and_new_board():
 run_test("12d. More Menu and New Board", test_menu_and_new_board)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 12e: Touch-screen hardening (iPhone/iPad gestures can't steal strokes)
+# ─────────────────────────────────────────────────────────────
+def test_touch_hardening():
+    css = js("""const b = getComputedStyle(document.body), c = getComputedStyle(document.getElementById('ink'));
+                return [b.userSelect || b.webkitUserSelect, c.touchAction,
+                        getComputedStyle(document.querySelector('#bar button')).touchAction];""")
+    assert css[0] == 'none', f"Text selection must be off on the board (iOS magnifier), got {css[0]}"
+    assert css[1] == 'none', f"Board must claim all touch gestures, got touch-action {css[1]}"
+    assert css[2] == 'manipulation', f"Toolbar buttons should not double-tap zoom, got {css[2]}"
+    blocked = js("""const e = new TouchEvent('touchstart', {cancelable: true, bubbles: true});
+                    document.getElementById('ink').dispatchEvent(e); return e.defaultPrevented;""")
+    assert blocked, "Touches on the board are not claimed (iOS could start a selection or scroll)"
+    n = js("return Ink.strokes.length;")
+    js("""const cv = document.getElementById('ink'), r = cv.getBoundingClientRect();
+          const ev = (t, x) => cv.dispatchEvent(new PointerEvent(t, {pointerType: 'touch', pointerId: 31, bubbles: true,
+            clientX: r.left + x, clientY: r.top + 200}));
+          ev('pointerdown', 100); ev('pointermove', 150); ev('lostpointercapture', 150);""")
+    assert js("return Ink.live.size;") == 0, "A touch taken over by the system left a stroke stuck open"
+    assert js("return Ink.strokes.length;") == n + 1, "The interrupted stroke was not kept"
+    js("Ink.undo();")
+
+run_test("12e. Touch-Screen Hardening", test_touch_hardening)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 13: Offline service worker
 # ─────────────────────────────────────────────────────────────
 def test_service_worker():
