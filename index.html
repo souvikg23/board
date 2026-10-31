@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Board</title>
+<meta name="description" content="Offline lecture board. No internet, no login, just open and go.">
+<meta name="theme-color" content="#1F2B26">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+/* ── Design Tokens ─────────────────────────────────────────── */
+:root{
+  --slate:#1F2B26; --slate2:#26352F; --chalk:#ECEAE2; --dim:#9FA89F;
+  --new:#F2D16B; --note:#8EC5E8; --cancel:#F29E9E; --ok:#A8D8A0;
+  --border:#34463E; --btn-border:#5B6E64;
+  --scale:1;
+}
+[data-theme="light"]{
+  --slate:#F5F3EE; --slate2:#E8E5DD; --chalk:#1F2B26; --dim:#6B7B6B;
+  --new:#B8860B; --note:#2171A5; --cancel:#C0392B; --ok:#27864A;
+  --border:#C8C4B8; --btn-border:#A0A090;
+}
+
+/* ── Reset & Base ──────────────────────────────────────────── */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--slate);color:var(--chalk);
+  font-family:"Cambria","Georgia","Times New Roman",serif;
+  transition:background .3s,color .3s}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 250px;height:100vh;height:100dvh}
+#board{padding:34px 48px 20px;overflow-y:auto;position:relative;display:flex;flex-direction:column}
+#page{position:relative;flex:1;min-height:0}
+#steps{overflow-x:auto}
+
+/* ── Board Typography ──────────────────────────────────────── */
+#board h1{font-weight:400;font-size:calc(30px * var(--scale));margin:0 0 6px;color:var(--chalk)}
+#board .sub{font:calc(15px * var(--scale)) system-ui,sans-serif;color:var(--dim);margin:0 0 26px}
+.step{font-size:calc(31px * var(--scale));line-height:1.55;margin:0 0 18px;color:var(--chalk);opacity:.62;
+  transition:opacity .25s,color .25s}
+.step.latest{opacity:1;color:var(--new)}
+.step.q{font-style:italic;font-size:calc(26px * var(--scale));line-height:1.45;
+  font-family:"Cambria","Georgia",serif;color:var(--note);opacity:1;
+  border-left:3px solid var(--note);padding-left:16px}
+.step.q::before{content:"Ask the class: ";font-style:normal;font-weight:700}
+.step.note{font-size:calc(18px * var(--scale));line-height:1.5;font-family:system-ui,sans-serif;
+  color:var(--note);opacity:.9;margin-top:-8px}
+.step.key{display:inline-block;border:2px solid var(--chalk);padding:6px 18px;opacity:1;color:var(--chalk)}
+.step.key.latest{border-color:var(--new)}
+.hidden{display:none!important}
+.why{font:calc(17px * var(--scale)) system-ui,sans-serif;color:var(--dim);margin-left:14px}
+.x{color:var(--cancel);text-decoration:line-through}
+
+/* ── Inline Math ───────────────────────────────────────────── */
+.fr{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;
+  font-size:.78em;line-height:1.15;margin:0 3px}
+.fr>span:first-child{border-bottom:1.5px solid currentColor;padding:0 3px}
+.mx{display:inline-block;vertical-align:middle;margin:0 4px;
+  border-left:2px solid currentColor;border-right:2px solid currentColor;border-radius:6px;padding:0 6px}
+.mx table{border-collapse:collapse}
+.mx td{padding:0 8px;text-align:center;font-size:.85em;line-height:1.3}
+
+/* ── Canvas Overlay ────────────────────────────────────────── */
+#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#ink.on{pointer-events:auto;cursor:crosshair;touch-action:none}
+#ink.on.duster{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect x='4' y='4' width='28' height='28' rx='6' fill='%23888' fill-opacity='.45' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 18 18,auto}
+
+/* ── Progress Bar ──────────────────────────────────────────── */
+#progress{flex-shrink:0;height:6px;background:var(--slate2);cursor:pointer;border-radius:3px;
+  margin-top:auto;padding-top:0;overflow:hidden;opacity:.6;transition:opacity .2s,height .15s}
+#progress:hover{opacity:1;height:10px}
+#progress .fill{height:100%;background:var(--new);border-radius:3px;transition:width .2s ease}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+aside{background:var(--slate2);border-left:1px solid var(--border);padding:20px 16px;
+  font:14px/1.5 system-ui,sans-serif;color:var(--dim);display:flex;flex-direction:column;gap:14px;
+  overflow-y:auto;transition:background .3s,border-color .3s}
+aside ol{margin:0;padding-left:22px}
+aside li{cursor:pointer;padding:2px 0}
+aside li.cur{color:var(--new);font-weight:600}
+#clock{font:600 30px ui-monospace,monospace;color:var(--chalk)}
+#count{color:var(--chalk)}
+button{font:600 14px system-ui,sans-serif;background:transparent;color:var(--chalk);
+  border:1px solid var(--btn-border);border-radius:5px;padding:7px 11px;cursor:pointer;
+  transition:border-color .2s,color .2s,background .2s}
+button:hover,button:focus-visible{border-color:var(--new);color:var(--new);outline:none}
+button.on{background:var(--new);color:var(--slate);border-color:var(--new)}
+.sw{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;
+  display:inline-block;margin-right:6px;transition:border-color .15s}
+.sw.sel{border-color:var(--chalk)}
+kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-radius:3px;padding:0 4px;color:var(--chalk)}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn-sm{padding:5px 8px;font-size:13px;min-width:32px;text-align:center}
+.font-ind{font:600 13px system-ui,sans-serif;color:var(--dim);min-width:38px;text-align:center}
+
+/* ── Editor Overlay ────────────────────────────────────────── */
+#editor{position:fixed;inset:0;z-index:10;background:var(--slate);display:flex;flex-direction:column;
+  gap:10px;padding:16px 20px calc(16px + env(safe-area-inset-bottom));transition:background .3s}
+#editor .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#editor .bar span{font:14px system-ui,sans-serif;color:var(--dim);margin-left:auto}
+#src{flex:1;width:100%;resize:none;background:var(--slate2);color:var(--chalk);border:1px solid var(--btn-border);
+  border-radius:5px;padding:14px;font:16px/1.6 ui-monospace,Consolas,monospace;tab-size:2;
+  transition:background .3s,color .3s,border-color .3s}
+#src:focus{outline:none;border-color:var(--new)}
+#editor details{font:14px/1.7 system-ui,sans-serif;color:var(--dim)}
+#editor summary{cursor:pointer;color:var(--chalk)}
+#editor code{font:13px ui-monospace,monospace;color:var(--new)}
+
+/* ── Library Overlay ───────────────────────────────────────── */
+#library{position:fixed;inset:0;z-index:10;background:var(--slate);display:flex;flex-direction:column;
+  padding:16px 20px calc(16px + env(safe-area-inset-bottom));transition:background .3s}
+#library .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+#lib-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.lib-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:6px;cursor:pointer;
+  font:15px/1.4 system-ui,sans-serif;color:var(--chalk);border:1px solid transparent;
+  transition:background .15s,border-color .15s}
+.lib-item:hover{background:var(--slate2);border-color:var(--border)}
+.lib-item.active{border-color:var(--new);background:var(--slate2)}
+.lib-name{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-meta{font:12px system-ui,sans-serif;color:var(--dim);white-space:nowrap}
+.lib-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.lib-item:hover .lib-actions,.lib-item.active .lib-actions{opacity:1}
+.lib-actions button{padding:4px 8px;font-size:12px;border-color:transparent}
+.lib-actions button:hover{color:var(--new);border-color:transparent}
+.lib-rename{background:transparent;color:var(--chalk);border:1px solid var(--new);border-radius:4px;
+  font:600 15px system-ui,sans-serif;padding:4px 8px;outline:none;width:100%}
+
+@media(prefers-reduced-motion:reduce){.step{transition:none}#progress .fill{transition:none}}
+
+/* ── Mobile ────────────────────────────────────────────────── */
+@media(max-width:760px){
+  .wrap{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  #board{padding:18px 16px 14px}
+  #board h1{font-size:calc(22px * var(--scale))}
+  #board .sub{margin-bottom:16px}
+  .step{font-size:calc(20px * var(--scale));margin-bottom:12px}
+  .step.q{font-size:calc(18px * var(--scale));padding-left:10px}
+  .step.note,.why{font-size:calc(14px * var(--scale))}
+  aside{border-left:0;border-top:1px solid var(--border);padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px;max-height:40vh}
+  #clock{font-size:20px}
+  aside ol{order:9;width:100%;display:flex;gap:6px;overflow-x:auto;padding:0;list-style:none}
+  aside li{white-space:nowrap;border:1px solid var(--btn-border);border-radius:5px;padding:5px 9px}
+  .keys{display:none}
+  button{padding:10px 14px}
+  #progress{height:8px}
+  #progress:hover{height:12px}
+  .lib-actions{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN LAYOUT
+     ═══════════════════════════════════════════════════════════ -->
+<div class="wrap">
+  <main id="board">
+    <div id="page">
+      <h1 id="title"></h1>
+      <p class="sub" id="sub"></p>
+      <div id="steps"></div>
+      <canvas id="ink"></canvas>
+    </div>
+    <div id="progress" onclick="Prog.click(event)" title="Click to jump to a line">
+      <div class="fill" id="prog-fill"></div>
+    </div>
+  </main>
+
+  <aside>
+    <div>
+      <div id="clock">00:00</div>
+      <button id="tbtn" onclick="Clock.toggle()">Start clock</button>
+    </div>
+    <div>
+      <span id="count"></span><br>
+      <button onclick="B.prev()">Back</button> <button onclick="B.next()">Next line</button>
+    </div>
+    <ol id="nav"></ol>
+    <div class="btn-row">
+      <button onclick="Lib.open()">Library</button>
+      <button onclick="Ed.open()">Edit</button>
+    </div>
+    <div>
+      <div class="btn-row">
+        <button id="pen" onclick="Ink.toggle()">Pen off</button>
+        <button id="duster" onclick="Ink.toggleDuster()">Duster</button>
+        <button onclick="Ink.undo()" title="Undo last stroke">Undo</button>
+        <button onclick="Ink.clear()">Clear ink</button>
+      </div>
+      <div style="margin-top:8px" id="sws"></div>
+    </div>
+    <div class="btn-row">
+      <button id="theme-btn" onclick="Theme.toggle()">☀️ Light</button>
+      <button class="btn-sm" onclick="Font.down()" title="Smaller text">A−</button>
+      <span class="font-ind" id="font-level">100%</span>
+      <button class="btn-sm" onclick="Font.up()" title="Larger text">A+</button>
+    </div>
+    <div class="keys">
+      <kbd>Space</kbd>/<kbd>→</kbd> next · <kbd>←</kbd> back<br>
+      <kbd>1</kbd>–<kbd>9</kbd> jump to slide<br>
+      <kbd>D</kbd> pen · <kbd>X</kbd> duster · <kbd>Ctrl+Z</kbd> undo ink · <kbd>C</kbd> clear<br>
+      <kbd>E</kbd> edit · <kbd>L</kbd> library · <kbd>W</kbd> theme<br>
+      <kbd>+</kbd>/<kbd>−</kbd> font · <kbd>T</kbd> clock · <kbd>F</kbd> fullscreen
+    </div>
+  </aside>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     EDITOR OVERLAY
+     ═══════════════════════════════════════════════════════════ -->
+<div id="editor" class="hidden">
+  <div class="bar">
+    <button onclick="Ed.close()">Done</button>
+    <button onclick="document.getElementById('file').click()">Open file</button>
+    <button onclick="Ed.save()">Save file</button>
+    <input type="file" id="file" accept=".txt,.md,text/plain" hidden onchange="Ed.load(this)">
+    <span id="stat"></span>
+  </div>
+  <details><summary>How to write a lecture</summary>
+    <code># Title</code> starts a slide · <code>&gt; text</code> subtitle ·
+    <code>? text</code> question for the class · <code>! text</code> boxed key line ·
+    <code>~ text</code> small note · any other line is a step, revealed one at a time<br>
+    <code>step || remark</code> adds a grey side remark ·
+    <code>x^{2}</code> superscript · <code>a_{n}</code> subscript · <code>{{1|2}}</code> fraction ·
+    <code>[[1, 0; 0, 1]]</code> matrix (rows split by <code>;</code>) · <code>~~text~~</code> crossed out<br>
+    <code>time: 50</code> on the first line turns the clock red after 50 minutes (default 30)
+  </details>
+  <textarea id="src" oninput="Ed.stat()" spellcheck="false" aria-label="Lecture text"></textarea>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     LIBRARY OVERLAY
+     ═══════════════════════════════════════════════════════════ -->
+<div id="library" class="hidden">
+  <div class="bar">
+    <button onclick="Lib.close()">Done</button>
+    <button onclick="Lib.create()">New lecture</button>
+    <button onclick="Lib.duplicate()">Duplicate</button>
+    <button onclick="Lib.exportAll()">Backup all</button>
+    <button onclick="document.getElementById('lib-import').click()">Restore</button>
+    <input type="file" id="lib-import" accept=".json" hidden onchange="Lib.importAll(this)">
+  </div>
+  <div id="lib-list"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT — zero dependencies, zero build
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+/* ── Inline formatting helpers ─────────────────────────────── */
+const fr=(n,d)=>`<span class="fr"><span>${n}</span><span>${d}</span></span>`;
+const mx=r=>`<span class="mx"><table>${r.map(x=>'<tr>'+x.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')}</table></span>`;
+const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const inl=t=>esc(t)
+  .replace(/\[\[(.+?)\]\]/g,(_,m)=>mx(m.split(';').map(r=>r.trim().split(/\s*,\s*|\s+/).filter(Boolean))))
+  .replace(/\{\{(.+?)\|(.+?)\}\}/g,(_,n,d)=>fr(n,d))
+  .replace(/\^\{(.+?)\}/g,'<sup>$1</sup>').replace(/_\{(.+?)\}/g,'<sub>$1</sub>')
+  .replace(/~~(.+?)~~/g,'<span class="x">$1</span>');
+const fmt=t=>{ const [m,...w]=t.split('||');
+  return inl(m.trim())+(w.length?`<span class="why">${inl(w.join('||').trim())}</span>`:''); };
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ── Parser ────────────────────────────────────────────────── */
+function parse(txt){
+  const L={time:30,slides:[]}; let cur=null;
+  for(const raw of txt.split(/\r?\n/)){
+    const l=raw.trim(); if(!l) continue;
+    const tm=l.match(/^time:\s*(\d+)\s*$/i);
+    if(tm && !L.slides.length){ L.time=+tm[1]; continue; }
+    if(l[0]==='#'){ cur={t:fmt(l.replace(/^#+\s*/,'')),s:'',st:[]}; L.slides.push(cur); continue; }
+    if(!cur){ cur={t:'',s:'',st:[]}; L.slides.push(cur); }
+    const r=l.slice(1).trim();
+    if(l[0]==='>') cur.s=r;
+    else if(l[0]==='?') cur.st.push(['q',fmt(r)]);
+    else if(l[0]==='!') cur.st.push(['key',fmt(r)]);
+    else if(l[0]==='~' && l[1]!=='~') cur.st.push(['note',fmt(r)]);
+    else cur.st.push(['line',fmt(l.replace(/^-\s+/,''))]);
+  }
+  if(!L.slides.length) L.slides.push({t:'Empty board',s:'Press Edit to start writing',st:[]});
+  return L;
+}
+
+const STARTER=`time: 50
+
+# Welcome to Board
+> Press Space, or Next line, to reveal
+? What happens when you press Next line?
+Each line appears one at a time
+The newest line is highlighted || older lines fade back
+! Boxed lines hold the key result
+~ Notes appear in small blue text.
+
+# Pen and clock
+> Draw over any slide
+Turn the pen on with D, or the Pen button
+Ink stays on its own slide || Clear ink wipes it
+The clock turns red when your lecture time is up
+
+# Your turn
+> Press Edit to see how this was written
+Slides, questions, notes and key lines are plain text
+Maths works too: x^{2} + y^{2}, a_{n}, {{1|2}}
+[[1, 0; 0, 1]] || a matrix
+~~Wrong step~~ crossed out, then corrected
+! Replace this text with your own lecture`;
+
+/* ══════════════════════════════════════════════════════════════
+   STORAGE — localStorage backed, structured library
+   ══════════════════════════════════════════════════════════════ */
+const Store={
+  _g(k){ try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;} },
+  _s(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} },
+
+  /* one-time migration from old single-key format */
+  migrate(){
+    const old=(()=>{try{return localStorage.getItem('board.lecture');}catch(e){return null;}})();
+    if(old!==null){
+      const id=uid();
+      const lib={lectures:[{id,name:this._nameFrom(old),content:old,modified:Date.now()}],activeId:id};
+      this._s('board.library',lib);
+      try{localStorage.removeItem('board.lecture');}catch(e){}
+    }
+  },
+
+  _nameFrom(txt){
+    const m=txt.match(/^#\s*(.+)$/m);
+    return m?m[1].trim().slice(0,60):'Untitled';
+  },
+
+  getLibrary(){
+    let lib=this._g('board.library');
+    if(!lib||!lib.lectures||!lib.lectures.length){
+      const id=uid();
+      lib={lectures:[{id,name:'Welcome',content:STARTER,modified:Date.now()}],activeId:id};
+      this._s('board.library',lib);
+    }
+    if(!lib.activeId) lib.activeId=lib.lectures[0].id;
+    return lib;
+  },
+
+  saveLibrary(lib){ this._s('board.library',lib); },
+
+  getPrefs(){ return this._g('board.prefs')||{theme:'dark',fontLevel:2}; },
+  savePrefs(p){ this._s('board.prefs',p); }
+};
+
+Store.migrate();
+let LIBRARY=Store.getLibrary();
+let PREFS=Store.getPrefs();
+
+function activeLec(){ return LIBRARY.lectures.find(l=>l.id===LIBRARY.activeId)||LIBRARY.lectures[0]; }
+let SRC=activeLec().content, LEC=parse(SRC), SLIDES=LEC.slides;
+
+/* ══════════════════════════════════════════════════════════════
+   THEME
+   ══════════════════════════════════════════════════════════════ */
+const Theme={
+  init(){
+    document.documentElement.setAttribute('data-theme',PREFS.theme);
+    this._meta();
+    this._btn();
+  },
+  toggle(){
+    PREFS.theme=PREFS.theme==='dark'?'light':'dark';
+    Store.savePrefs(PREFS);
+    document.documentElement.setAttribute('data-theme',PREFS.theme);
+    this._meta(); this._btn();
+    Ink.updatePalette();
+  },
+  _meta(){
+    const m=document.querySelector('meta[name="theme-color"]');
+    if(m) m.content=PREFS.theme==='dark'?'#1F2B26':'#F5F3EE';
+  },
+  _btn(){
+    const b=document.getElementById('theme-btn');
+    b.textContent=PREFS.theme==='dark'?'☀️ Light':'🌙 Dark';
+    b.title=PREFS.theme==='dark'?'Switch to whiteboard':'Switch to chalkboard';
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   FONT SIZE
+   ══════════════════════════════════════════════════════════════ */
+const FSTEPS=[0.75,0.875,1,1.25,1.5];
+const FLABELS=['75%','88%','100%','125%','150%'];
+const Font={
+  init(){
+    if(PREFS.fontLevel==null||PREFS.fontLevel<0||PREFS.fontLevel>=FSTEPS.length) PREFS.fontLevel=2;
+    this._apply();
+  },
+  up(){ if(PREFS.fontLevel<FSTEPS.length-1){ PREFS.fontLevel++; this._apply(); Store.savePrefs(PREFS); } },
+  down(){ if(PREFS.fontLevel>0){ PREFS.fontLevel--; this._apply(); Store.savePrefs(PREFS); } },
+  _apply(){
+    document.documentElement.style.setProperty('--scale',FSTEPS[PREFS.fontLevel]);
+    document.getElementById('font-level').textContent=FLABELS[PREFS.fontLevel];
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   EDITOR
+   ══════════════════════════════════════════════════════════════ */
+const Ed={
+  open(){
+    document.getElementById('src').value=SRC;
+    document.getElementById('editor').classList.remove('hidden');
+    document.getElementById('src').focus();
+    this.stat();
+  },
+  close(){
+    const v=document.getElementById('src').value;
+    document.getElementById('editor').classList.add('hidden');
+    if(v!==SRC){
+      SRC=v; LEC=parse(v); SLIDES=LEC.slides;
+      Ink.strokes={}; Ink.undone={};
+      B.i=0; B.n=0;
+      /* persist to library */
+      const lec=activeLec();
+      lec.content=v;
+      lec.name=Store._nameFrom(v);
+      lec.modified=Date.now();
+      Store.saveLibrary(LIBRARY);
+    }
+    B.render();
+  },
+  stat(){
+    const L=parse(document.getElementById('src').value);
+    document.getElementById('stat').textContent=
+      `${L.slides.length} slide${L.slides.length===1?'':'s'} · saved on this device`;
+  },
+  save(){
+    const v=document.getElementById('src').value;
+    const name=(v.match(/^#\s*(.+)$/m)?.[1]||'lecture').replace(/[^\w\- ]+/g,'').trim().slice(0,60)||'lecture';
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([v],{type:'text/plain'}));
+    a.download=name+'.txt'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  },
+  load(inp){
+    const f=inp.files[0]; if(!f) return;
+    f.text().then(t=>{document.getElementById('src').value=t;this.stat();}); inp.value='';
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   LIBRARY — multi-lecture management
+   ══════════════════════════════════════════════════════════════ */
+const Lib={
+  open(){
+    document.getElementById('library').classList.remove('hidden');
+    this._render();
+  },
+  close(){
+    document.getElementById('library').classList.add('hidden');
+  },
+
+  _render(){
+    const el=document.getElementById('lib-list');
+    const sorted=[...LIBRARY.lectures].sort((a,b)=>(b.modified||0)-(a.modified||0));
+    el.innerHTML=sorted.map(lec=>{
+      const act=lec.id===LIBRARY.activeId;
+      const d=lec.modified?new Date(lec.modified).toLocaleDateString(undefined,
+        {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      const sc=parse(lec.content).slides.length;
+      return `<div class="lib-item${act?' active':''}" data-id="${lec.id}" onclick="Lib.select('${lec.id}')">
+        <div class="lib-name" title="${esc(lec.name)}">${esc(lec.name)}</div>
+        <div class="lib-meta">${sc} slide${sc!==1?'s':''} · ${d}</div>
+        <div class="lib-actions">
+          <button onclick="event.stopPropagation();Lib.rename('${lec.id}')" title="Rename">✏️</button>
+          <button onclick="event.stopPropagation();Lib.remove('${lec.id}')" title="Delete">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  select(id){
+    LIBRARY.activeId=id;
+    Store.saveLibrary(LIBRARY);
+    SRC=activeLec().content;
+    LEC=parse(SRC); SLIDES=LEC.slides;
+    Ink.strokes={}; Ink.undone={};
+    B.i=0; B.n=0;
+    B.render();
+    this._render();
+  },
+
+  create(){
+    const lec={id:uid(),name:'Untitled',content:'# New Lecture\n> Start writing here\n',modified:Date.now()};
+    LIBRARY.lectures.push(lec);
+    Store.saveLibrary(LIBRARY);
+    this.select(lec.id);
+  },
+
+  duplicate(){
+    const cur=activeLec();
+    const lec={id:uid(),name:cur.name+' (copy)',content:cur.content,modified:Date.now()};
+    LIBRARY.lectures.push(lec);
+    Store.saveLibrary(LIBRARY);
+    this.select(lec.id);
+  },
+
+  rename(id){
+    const lec=LIBRARY.lectures.find(l=>l.id===id);
+    if(!lec) return;
+    const row=document.querySelector(`.lib-item[data-id="${id}"] .lib-name`);
+    if(!row) return;
+    const safe=lec.name.replace(/"/g,'&quot;');
+    row.innerHTML=`<input class="lib-rename" value="${safe}"
+      onblur="Lib._finishRename('${id}',this)"
+      onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}">`;
+    const inp=row.querySelector('input');
+    inp.focus(); inp.select();
+  },
+
+  _finishRename(id,inp){
+    if(inp.dataset.cancel){ this._render(); return; }
+    const lec=LIBRARY.lectures.find(l=>l.id===id);
+    if(!lec) return;
+    lec.name=inp.value.trim()||'Untitled';
+    lec.modified=Date.now();
+    Store.saveLibrary(LIBRARY);
+    this._render();
+  },
+
+  remove(id){
+    if(LIBRARY.lectures.length<=1){alert('Cannot delete the only lecture.');return;}
+    const lec=LIBRARY.lectures.find(l=>l.id===id);
+    if(!lec||!confirm(`Delete "${lec.name}"?`)) return;
+    LIBRARY.lectures=LIBRARY.lectures.filter(l=>l.id!==id);
+    if(LIBRARY.activeId===id){
+      LIBRARY.activeId=LIBRARY.lectures[0].id;
+      SRC=activeLec().content; LEC=parse(SRC); SLIDES=LEC.slides;
+      Ink.strokes={}; Ink.undone={}; B.i=0; B.n=0; B.render();
+    }
+    Store.saveLibrary(LIBRARY);
+    this._render();
+  },
+
+  /* ── Backup / Restore ─────────────────────────────────────── */
+  exportAll(){
+    const blob=new Blob([JSON.stringify(LIBRARY,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='board-backup-'+new Date().toISOString().slice(0,10)+'.json';
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  },
+  importAll(inp){
+    const f=inp.files[0]; if(!f) return;
+    f.text().then(t=>{
+      try{
+        const data=JSON.parse(t);
+        if(!data.lectures||!data.lectures.length) throw new Error('No lectures found in file');
+        let added=0;
+        for(const lec of data.lectures){
+          if(!LIBRARY.lectures.find(l=>l.id===lec.id)){
+            LIBRARY.lectures.push(lec); added++;
+          }
+        }
+        if(added===0 && confirm(`All ${data.lectures.length} lecture(s) already exist. Replace entire library?`)){
+          LIBRARY.lectures=data.lectures;
+          LIBRARY.activeId=data.activeId||data.lectures[0].id;
+          added=data.lectures.length;
+        }
+        Store.saveLibrary(LIBRARY);
+        if(added) this.select(LIBRARY.activeId||LIBRARY.lectures[0].id);
+        this._render();
+        alert(`Restored ${added} lecture(s).`);
+      }catch(e){alert('Could not read backup: '+e.message);}
+    });
+    inp.value='';
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   BOARD — slide & line navigation
+   ══════════════════════════════════════════════════════════════ */
+const B={i:0,n:0,
+  render(){
+    const S=SLIDES[this.i];
+    document.getElementById('title').innerHTML=S.t;
+    document.getElementById('sub').textContent=S.s;
+    document.getElementById('steps').innerHTML=S.st.map(([c,h],j)=>
+      `<div class="step ${c} ${j<this.n?'':'hidden'} ${j===this.n-1?'latest':''}">${h}</div>`).join('');
+    document.getElementById('count').textContent=`Line ${this.n} / ${S.st.length}`;
+    document.getElementById('nav').innerHTML=SLIDES.map((s,j)=>
+      `<li class="${j===this.i?'cur':''}" onclick="B.go(${j})">${s.t.split(' · ')[0]}</li>`).join('');
+    Ink.redraw();
+    Prog.update();
+  },
+  next(){
+    const L=SLIDES[this.i].st.length;
+    if(this.n<L) this.n++; else if(this.i<SLIDES.length-1){this.i++;this.n=0;}
+    this.render();
+  },
+  prev(){
+    if(this.n>0) this.n--; else if(this.i>0){this.i--;this.n=SLIDES[this.i].st.length;}
+    this.render();
+  },
+  go(j){ if(j>=SLIDES.length) return; this.i=j; this.n=0; this.render(); }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   PROGRESS BAR
+   ══════════════════════════════════════════════════════════════ */
+const Prog={
+  update(){
+    const total=SLIDES[B.i].st.length;
+    const pct=total?Math.round((B.n/total)*100):100;
+    document.getElementById('prog-fill').style.width=pct+'%';
+  },
+  click(e){
+    const bar=document.getElementById('progress');
+    const rect=bar.getBoundingClientRect();
+    const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+    B.n=Math.round(pct*SLIDES[B.i].st.length);
+    B.render();
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   CLOCK
+   ══════════════════════════════════════════════════════════════ */
+const Clock={t0:null,acc:0,h:null,
+  toggle(){
+    const b=document.getElementById('tbtn');
+    if(this.h){
+      this.acc+=Date.now()-this.t0;
+      clearInterval(this.h); this.h=null;
+      b.textContent='Resume clock'; Wake.off();
+    } else {
+      this.t0=Date.now();
+      this.h=setInterval(()=>this.show(),500);
+      b.textContent='Pause clock'; Wake.on();
+    }
+  },
+  show(){
+    const s=Math.floor((this.acc+(this.h?Date.now()-this.t0:0))/1000);
+    const el=document.getElementById('clock');
+    el.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+    el.style.color=s>=LEC.time*60?'var(--cancel)':'';
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   INK — pen drawing with undo / redo
+   ══════════════════════════════════════════════════════════════ */
+const Ink={
+  on:false, mode:'pen', col:null, strokes:{}, undone:{}, cur:null, cv:null,
+  darkCols:['#F2D16B','#ECEAE2','#8EC5E8','#F29E9E'],
+  lightCols:['#B8860B','#1F2B26','#2171A5','#C0392B'],
+  cols:null,
+
+  init(){
+    this.cols=PREFS.theme==='dark'?this.darkCols:this.lightCols;
+    this.col=this.cols[0];
+    this.cv=document.getElementById('ink');
+    const pg=document.getElementById('page');
+    const fit=()=>{
+      const d=devicePixelRatio||1;
+      this.cv.width=Math.round(pg.offsetWidth*d);
+      this.cv.height=Math.round(pg.offsetHeight*d);
+      this.redraw();
+    };
+    new ResizeObserver(fit).observe(pg); fit();
+    this._swatches();
+
+    const pos=e=>{const r=this.cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];};
+    this.cv.addEventListener('pointerdown',e=>{
+      if(!this.on) return;
+      if(this.mode==='duster'){
+        this.cur={e:true,p:[pos(e)]};
+      } else {
+        this.cur={c:this.col,p:[pos(e)]};
+      }
+      (this.strokes[B.i]??=[]).push(this.cur);
+      this.undone[B.i]=[];              // new stroke clears redo
+      this.cv.setPointerCapture(e.pointerId);
+    });
+    this.cv.addEventListener('pointermove',e=>{
+      if(this.cur){this.cur.p.push(pos(e));this.redraw();}
+    });
+    this.cv.addEventListener('pointerup',()=>{this.cur=null;});
+  },
+
+  _swatches(){
+    document.getElementById('sws').innerHTML=this.cols.map(c=>
+      `<span class="sw ${c===this.col?'sel':''}" style="background:${c}"
+        onclick="Ink.pick('${c}')" title="pen colour"></span>`).join('');
+  },
+
+  updatePalette(){
+    const oldCols=PREFS.theme==='dark'?this.lightCols:this.darkCols;
+    this.cols=PREFS.theme==='dark'?this.darkCols:this.lightCols;
+    const idx=oldCols.indexOf(this.col);
+    this.col=idx>=0?this.cols[idx]:this.cols[0];
+    this._swatches();
+  },
+
+  pick(c){
+    this.col=c;
+    document.querySelectorAll('.sw').forEach((s,i)=>s.classList.toggle('sel',this.cols[i]===c));
+    if(this.mode==='duster') this._setMode('pen');
+    if(!this.on) this.toggle();
+  },
+  toggle(){
+    this.on=!this.on;
+    if(!this.on) this._setMode('pen');
+    this.cv.classList.toggle('on',this.on);
+    this._updateBtns();
+  },
+  toggleDuster(){
+    if(!this.on){
+      this.on=true;
+      this.cv.classList.add('on');
+    }
+    this._setMode(this.mode==='duster'?'pen':'duster');
+    this._updateBtns();
+  },
+  _setMode(m){
+    this.mode=m;
+    this.cv.classList.toggle('duster',m==='duster');
+  },
+  _updateBtns(){
+    const p=document.getElementById('pen');
+    const d=document.getElementById('duster');
+    p.textContent=this.on && this.mode==='pen'?'Pen on':'Pen off';
+    p.classList.toggle('on',this.on && this.mode==='pen');
+    d.classList.toggle('on',this.on && this.mode==='duster');
+  },
+
+  /* undo / redo */
+  undo(){
+    const arr=this.strokes[B.i];
+    if(!arr||!arr.length) return;
+    (this.undone[B.i]??=[]).push(arr.pop());
+    this.redraw();
+  },
+  redo(){
+    const arr=this.undone[B.i];
+    if(!arr||!arr.length) return;
+    (this.strokes[B.i]??=[]).push(arr.pop());
+    this.redraw();
+  },
+
+  clear(){ this.strokes[B.i]=[]; this.undone[B.i]=[]; this.redraw(); },
+
+  redraw(){
+    if(!this.cv) return;
+    const g=this.cv.getContext('2d');
+    const d=devicePixelRatio||1;
+    g.setTransform(d,0,0,d,0,0);
+    g.clearRect(0,0,this.cv.width,this.cv.height);
+    g.lineCap='round'; g.lineJoin='round';
+    (this.strokes[B.i]||[]).forEach(s=>{
+      if(s.e){
+        /* duster stroke — erase pixels */
+        g.globalCompositeOperation='destination-out';
+        g.lineWidth=36;
+        g.strokeStyle='rgba(0,0,0,1)';
+      } else {
+        g.globalCompositeOperation='source-over';
+        g.lineWidth=3;
+        g.strokeStyle=s.c;
+      }
+      g.beginPath();
+      s.p.forEach(([x,y],j)=>j?g.lineTo(x,y):g.moveTo(x,y));
+      g.stroke();
+    });
+    g.globalCompositeOperation='source-over';
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   KEYBOARD
+   ══════════════════════════════════════════════════════════════ */
+document.addEventListener('keydown',e=>{
+  /* editor open — only Escape */
+  if(!document.getElementById('editor').classList.contains('hidden')){
+    if(e.key==='Escape') Ed.close(); return;
+  }
+  /* library open — only Escape */
+  if(!document.getElementById('library').classList.contains('hidden')){
+    if(e.key==='Escape') Lib.close(); return;
+  }
+
+  /* Ctrl / Cmd combos */
+  if((e.ctrlKey||e.metaKey) && e.key==='z' && e.shiftKey){ e.preventDefault(); Ink.redo(); return; }
+  if((e.ctrlKey||e.metaKey) && e.key==='z'){ e.preventDefault(); Ink.undo(); return; }
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+
+  /* plain keys */
+  if(e.key===' '||e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();B.next();}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();B.prev();}
+  else if(/^[1-9]$/.test(e.key)) B.go(+e.key-1);
+  else if(e.key==='e'||e.key==='E'){e.preventDefault();Ed.open();}
+  else if(e.key==='l'||e.key==='L'){e.preventDefault();Lib.open();}
+  else if(e.key==='d'||e.key==='D') Ink.toggle();
+  else if(e.key==='x'||e.key==='X') Ink.toggleDuster();
+  else if(e.key==='c'||e.key==='C') Ink.clear();
+  else if(e.key==='t'||e.key==='T') Clock.toggle();
+  else if(e.key==='w'||e.key==='W') Theme.toggle();
+  else if(e.key==='='||e.key==='+') Font.up();
+  else if(e.key==='-'||e.key==='_') Font.down();
+  else if(e.key==='f'||e.key==='F'){
+    if(!document.fullscreenEnabled) return;
+    document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   WAKE LOCK & INIT
+   ══════════════════════════════════════════════════════════════ */
+const Wake={l:null,
+  async on(){try{this.l=await navigator.wakeLock?.request('screen');}catch(e){}},
+  off(){this.l?.release();this.l=null;}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Clock.h)Wake.on();});
+
+/* boot */
+Theme.init();
+Font.init();
+Ink.init();
+B.render();
+if('serviceWorker' in navigator && location.protocol!=='file:'){
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    reg.update();
+  });
+}
+
+</script>
+</body>
+</html>
