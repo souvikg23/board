@@ -2,6 +2,7 @@
 # Usage:  python tests/run_full_test_suite.py [url]
 # Default url is http://localhost:8080 (run `python -m http.server 8080` in the repo first).
 # Set CHROME_BIN to point at a specific Chrome/Chromium/Brave binary if needed.
+import hashlib
 import json
 import os
 import sys
@@ -32,6 +33,21 @@ driver.get(URL)
 time.sleep(1)
 
 test_results = []
+
+# ─────────────────────────────────────────────────────────────
+# VERSION LOCK (no browser needed): index.html must load app.js by its fingerprint,
+# so a cached page can never run with a newer or older script.
+# ─────────────────────────────────────────────────────────────
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+with open(os.path.join(ROOT, "app.js"), "rb") as fh:
+    FINGERPRINT = hashlib.sha256(fh.read()).hexdigest()[:10]
+with open(os.path.join(ROOT, "index.html"), encoding="utf-8") as fh:
+    _html = fh.read()
+if f'<script src="app.js?v={FINGERPRINT}"></script>' in _html:
+    test_results.append({'name': 'V. Script version lock', 'status': 'PASS', 'error': None})
+else:
+    test_results.append({'name': 'V. Script version lock', 'status': 'FAIL',
+                         'error': f'app.js changed: in index.html set <script src="app.js?v={FINGERPRINT}"></script>'})
 
 def run_test(name, fn):
     try:
@@ -91,6 +107,7 @@ def test_initial_render():
     assert page_no() == "1 / 1", f"Expected page 1 / 1, got {page_no()}"
     assert js("return Ink.strokes.length;") == 0, "A new board should be empty"
     assert js("return document.querySelector('.sw.sel')?.dataset.arg;") == "0", "Chalk should be the default colour"
+    assert "on" in driver.find_element(By.ID, "pen").get_attribute("class"), "Pen button should show the pen is active"
 
 run_test("1. Empty Board Renders", test_initial_render)
 
@@ -135,6 +152,10 @@ def test_duster():
     assert alpha(120, 100) > 0, "Duster erased ink it never touched"
     driver.find_element(By.ID, "duster").click()
     assert js("return Ink.mode;") == 'pen', "Second click should return to the pen"
+    driver.find_element(By.ID, "duster").click()
+    driver.find_element(By.ID, "pen").click()
+    assert js("return Ink.mode;") == 'pen', "Pen button did not switch back from the duster"
+    assert "on" not in driver.find_element(By.ID, "duster").get_attribute("class"), "Duster still highlighted"
 
 run_test("4. Duster Rubs Out", test_duster)
 
@@ -291,6 +312,11 @@ def test_service_worker():
         .then(all => done(all.flat().map(r => new URL(r.url).pathname)));""")
     for f in ["/index.html", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png"]:
         assert any(c.endswith(f) for c in cached), f"{f} not cached for offline use"
+    script = js("return new URL(document.querySelector('script[src]').src).search;")
+    exact = driver.execute_async_script("""
+      const done = arguments[arguments.length - 1];
+      caches.match(document.querySelector('script[src]').src).then(r => done(!!r));""")
+    assert script.startswith("?v=") and exact, f"The exact script version this page needs ({script}) is not cached"
 
 run_test("13. Offline Service Worker", test_service_worker)
 

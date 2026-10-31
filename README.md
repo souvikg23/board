@@ -23,8 +23,12 @@ Press **⬇ Install app** in the toolbar (on iPhone/iPad it shows the steps), or
 Open it once while online; after that it runs with no internet.
 
 ## Updating the app
-Code lives in `app.js`, layout and styles in `index.html`. Edit, push, done:
-installed copies fetch the new version in the background and show it on the next open.
+Code lives in `app.js`, layout and styles in `index.html`. Installed copies fetch new versions in
+the background and show them on the next open.
+
+After editing `app.js`, update its fingerprint in `index.html` (`<script src="app.js?v=…">`).
+The tests fail and print the exact value if you forget. The fingerprint guarantees a page only ever
+runs the script it was built with, even from a stale cache.
 Bump `VERSION` in `sw.js` only if you add or rename files.
 
 The earlier slide-presenter version is kept on the `presenter` branch.

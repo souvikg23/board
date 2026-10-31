@@ -106,6 +106,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
   sync() {
     document.querySelectorAll('.sw').forEach((b, i) => b.classList.toggle('sel', this.mode === 'pen' && i === this.ci));
     document.querySelectorAll('.sz').forEach((b, i) => b.classList.toggle('on', i === this.si));
+    $('pen').classList.toggle('on', this.mode === 'pen');
     $('duster').classList.toggle('on', this.mode === 'duster');
     this.cv.classList.toggle('duster', this.mode === 'duster');
   },
