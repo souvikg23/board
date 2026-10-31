@@ -1,42 +1,37 @@
 # Board
 
-Offline lecture board. Installs as an app on PC (Chrome/Edge) and phones (Android, iOS).
+A blank board for teaching. Opens instantly, works with no internet, no login.
+Installs as an app on PC (Chrome, Edge, Brave) and phones (Android, iPhone, iPad).
 
 **Live:** https://souvikg23.github.io/board/
 
-## Put it online once (free, 5 min)
-1. Create a public GitHub repo, upload everything in this folder (keep `icons/`).
-2. Repo → Settings → Pages → Deploy from branch → `main` / root → Save.
-3. Open `https://<username>.github.io/<repo>/`.
+## What it does
+- **Draw** with a mouse, stylus or finger: four colours, three sizes, a duster.
+  Undo/redo covers everything, even a cleared page. With a stylus, a resting palm doesn't draw.
+- **Pages**: + Page for a fresh board; flip with ◀ ▶, the arrow keys or a presentation clicker
+  (moving past the last page gives you a new one).
+- **Save & share**: Save turns every page into one picture (on phones it opens the Share sheet, e.g. WhatsApp).
+- Plain, grid or ruled background · lecture clock · chalkboard or whiteboard
+  (colours re-ink to suit, so white chalk never disappears on a whiteboard).
+- Your board stays on this device and survives closing the tab. Board asks the browser to keep that storage
+  permanently, so it isn't cleared when space runs low.
+
+Press **?** in the app for the keyboard shortcuts.
 
 ## Install
-Press **⬇ Install app** in Board's sidebar (Chrome, Edge, Brave, Android; on iPhone/iPad it shows the steps). Or:
-- PC (Chrome/Edge/Brave): install icon at the right of the address bar.
-- Android (Chrome): menu → Add to home screen / Install app.
-- iPhone/iPad (Safari): Share → Add to Home Screen.
+Press **⬇ Install app** in the toolbar (on iPhone/iPad it shows the steps), or use the install icon in the address bar.
+Open it once while online; after that it runs with no internet.
 
-Open it once while online. After that it runs with no internet, and everything (lectures, settings)
-stays on that device. Board asks the browser to keep that storage permanently, so it isn't cleared when space runs low.
-
-## Getting started
-First visit shows a short welcome card. **Take the 1-minute tour** is a lecture that teaches Board
-by making you use each feature; press **?** any time to bring the card back.
-
-## Writing lectures
-Press **Edit** (or E). Lectures are plain text; the format guide sits at the top of the editor,
-and **New lecture** starts from a fill-in template.
-Your lecture is kept on that device. Use **Save file** / **Open file** to move lectures between devices or share them.
-
-## Updating the app itself
+## Updating the app
 Code lives in `app.js`, layout and styles in `index.html`. Edit, push, done:
 installed copies fetch the new version in the background and show it on the next open.
 Bump `VERSION` in `sw.js` only if you add or rename files.
 
-Double-clicking `index.html` on a PC still works offline without installing.
+The earlier slide-presenter version is kept on the `presenter` branch.
 
 ## Tests
 Every push and pull request runs these automatically (GitHub → **Actions** tab):
-the functional tests, attack tests for the known injection paths, and a CodeQL security scan.
+the functional tests, attack tests against tampered saved data, and a CodeQL security scan.
 To run the tests locally:
 ```
 python -m http.server 8080          # in this folder

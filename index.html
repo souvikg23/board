@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Board</title>
-<meta name="description" content="Offline lecture board. No internet, no login, just open and go.">
+<meta name="description" content="A blank board for teaching. Opens instantly, works offline, no login.">
 <meta name="theme-color" content="#1F2B26">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -13,270 +13,155 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-/* ── Design Tokens ─────────────────────────────────────────── */
+/* ── Colours: board, chalk and the four pen colours for each theme ── */
 :root{
-  --slate:#1F2B26; --slate2:#26352F; --chalk:#ECEAE2; --dim:#9FA89F;
-  --new:#F2D16B; --note:#8EC5E8; --cancel:#F29E9E;
-  --border:#34463E; --btn-border:#5B6E64;
-  --scale:1;
+  --slate:#1F2B26; --slate2:#26352F; --chalk:#ECEAE2; --dim:#9FA89F; --new:#F2D16B;
+  --border:#34463E; --btn-border:#5B6E64; --rule:rgba(236,234,226,.10);
+  --c0:#ECEAE2; --c1:#F2D16B; --c2:#8EC5E8; --c3:#F29E9E;
 }
 [data-theme="light"]{
-  --slate:#F5F3EE; --slate2:#E8E5DD; --chalk:#1F2B26; --dim:#6B7B6B;
-  --new:#B8860B; --note:#2171A5; --cancel:#C0392B;
-  --border:#C8C4B8; --btn-border:#A0A090;
+  --slate:#F5F3EE; --slate2:#E8E5DD; --chalk:#1F2B26; --dim:#6B7B6B; --new:#B8860B;
+  --border:#C8C4B8; --btn-border:#A0A090; --rule:rgba(31,43,38,.12);
+  --c0:#1F2B26; --c1:#B8860B; --c2:#2171A5; --c3:#C0392B;
 }
 
-/* ── Reset & Base ──────────────────────────────────────────── */
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--slate);color:var(--chalk);
-  font-family:"Cambria","Georgia","Times New Roman",serif;
-  transition:background .3s,color .3s}
-
-/* ── Layout ────────────────────────────────────────────────── */
-.wrap{display:grid;grid-template-columns:minmax(0,1fr) 250px;height:100vh;height:100dvh}
-#board{padding:34px 48px 20px;overflow-y:auto;position:relative;display:flex;flex-direction:column}
-#page{position:relative;flex:1;min-height:0}
-#steps{overflow-x:auto}
-
-/* ── Board Typography ──────────────────────────────────────── */
-#board h1{font-weight:400;font-size:calc(30px * var(--scale));margin:0 0 6px;color:var(--chalk)}
-#board .sub{font:calc(15px * var(--scale)) system-ui,sans-serif;color:var(--dim);margin:0 0 26px}
-.step{font-size:calc(31px * var(--scale));line-height:1.55;margin:0 0 18px;color:var(--chalk);opacity:.62;
-  transition:opacity .25s,color .25s}
-.step.latest{opacity:1;color:var(--new)}
-.step.q{font-style:italic;font-size:calc(26px * var(--scale));line-height:1.45;
-  font-family:"Cambria","Georgia",serif;color:var(--note);opacity:1;
-  border-left:3px solid var(--note);padding-left:16px}
-.step.q::before{content:"Ask the class: ";font-style:normal;font-weight:700}
-.step.note{font-size:calc(18px * var(--scale));line-height:1.5;font-family:system-ui,sans-serif;
-  color:var(--note);opacity:.9;margin-top:-8px}
-.step.key{display:inline-block;border:2px solid var(--chalk);padding:6px 18px;opacity:1;color:var(--chalk)}
-.step.key.latest{border-color:var(--new)}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--slate);color:var(--chalk);
+  font:14px/1.4 system-ui,sans-serif;transition:background .3s,color .3s}
+.wrap{display:flex;flex-direction:column;height:100vh;height:100dvh}
 .hidden{display:none!important}
-.why{font:calc(17px * var(--scale)) system-ui,sans-serif;color:var(--dim);margin-left:14px}
-.x{color:var(--cancel);text-decoration:line-through}
 
-/* ── Inline Math ───────────────────────────────────────────── */
-.fr{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;
-  font-size:.78em;line-height:1.15;margin:0 3px}
-.fr>span:first-child{border-bottom:1.5px solid currentColor;padding:0 3px}
-.mx{display:inline-block;vertical-align:middle;margin:0 4px;
-  border-left:2px solid currentColor;border-right:2px solid currentColor;border-radius:6px;padding:0 6px}
-.mx table{border-collapse:collapse}
-.mx td{padding:0 8px;text-align:center;font-size:.85em;line-height:1.3}
+/* ── Board ── */
+#board{position:relative;flex:1;min-height:0;background-color:var(--slate)}
+#board.grid{background-image:linear-gradient(var(--rule) 1px,transparent 1px),linear-gradient(90deg,var(--rule) 1px,transparent 1px);background-size:40px 40px}
+#board.lines{background-image:linear-gradient(var(--rule) 1px,transparent 1px);background-size:100% 40px}
+#ink{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#ink.duster{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect x='4' y='4' width='28' height='28' rx='6' fill='%23888' fill-opacity='.45' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 18 18,auto}
 
-/* ── Canvas Overlay ────────────────────────────────────────── */
-#ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#ink.on{pointer-events:auto;cursor:crosshair;touch-action:none}
-#ink.on.duster{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect x='4' y='4' width='28' height='28' rx='6' fill='%23888' fill-opacity='.45' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 18 18,auto}
-
-/* ── Progress Bar ──────────────────────────────────────────── */
-#progress{flex-shrink:0;height:6px;background:var(--slate2);cursor:pointer;border-radius:3px;
-  margin-top:auto;padding-top:0;overflow:hidden;opacity:.6;transition:opacity .2s,height .15s}
-#progress:hover{opacity:1;height:10px}
-#progress .fill{height:100%;background:var(--new);border-radius:3px;transition:width .2s ease}
-
-/* ── Sidebar ───────────────────────────────────────────────── */
-aside{background:var(--slate2);border-left:1px solid var(--border);padding:20px 16px;
-  font:14px/1.5 system-ui,sans-serif;color:var(--dim);display:flex;flex-direction:column;gap:14px;
-  overflow-y:auto;transition:background .3s,border-color .3s}
-aside ol{margin:0;padding-left:22px}
-aside li{cursor:pointer;padding:2px 0}
-aside li.cur{color:var(--new);font-weight:600}
-#clock{font:600 30px ui-monospace,monospace;color:var(--chalk)}
-#count{color:var(--chalk)}
-button{font:600 14px system-ui,sans-serif;background:transparent;color:var(--chalk);
-  border:1px solid var(--btn-border);border-radius:5px;padding:7px 11px;cursor:pointer;
+/* ── Toolbar ── */
+#bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+  background:var(--slate2);border-top:1px solid var(--border);transition:background .3s}
+.grp{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.sep{width:1px;height:26px;background:var(--border);margin:0 4px;flex-shrink:0}
+.spacer{flex:1}
+button{font:600 14px system-ui,sans-serif;background:transparent;color:var(--chalk);white-space:nowrap;
+  border:1px solid var(--btn-border);border-radius:6px;padding:7px 11px;cursor:pointer;
   transition:border-color .2s,color .2s,background .2s}
 button:hover,button:focus-visible{border-color:var(--new);color:var(--new);outline:none}
 button.on{background:var(--new);color:var(--slate);border-color:var(--new)}
-.sw{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;
-  display:inline-block;margin-right:6px;transition:border-color .15s}
-.sw.sel{border-color:var(--chalk)}
-kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-radius:3px;padding:0 4px;color:var(--chalk)}
-.btn-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.btn-sm{padding:5px 8px;font-size:13px;min-width:32px;text-align:center}
-.font-ind{font:600 13px system-ui,sans-serif;color:var(--dim);min-width:38px;text-align:center}
+.sw{width:28px;height:28px;padding:0;border-radius:50%;border:2px solid var(--slate2);box-shadow:0 0 0 1px var(--btn-border)}
+.sw:hover,.sw:focus-visible{border-color:var(--slate2);box-shadow:0 0 0 2px var(--new)}
+.sw.sel{box-shadow:0 0 0 3px var(--chalk)}
+.sw[data-arg="0"]{background:var(--c0)} .sw[data-arg="1"]{background:var(--c1)}
+.sw[data-arg="2"]{background:var(--c2)} .sw[data-arg="3"]{background:var(--c3)}
+.sz{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center}
+.sz span{display:block;border-radius:50%;background:currentColor}
+#page-no{min-width:52px;text-align:center;font-weight:600}
+#clock{font-family:ui-monospace,monospace;min-width:86px}
+#full{color:var(--c3);font-weight:600}
 
-/* ── Editor Overlay ────────────────────────────────────────── */
-#editor{position:fixed;inset:0;z-index:10;background:var(--slate);display:flex;flex-direction:column;
-  gap:10px;padding:16px 20px calc(16px + env(safe-area-inset-bottom));transition:background .3s}
-#editor .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-#editor .bar span{font:14px system-ui,sans-serif;color:var(--dim);margin-left:auto}
-#src{flex:1;width:100%;resize:none;background:var(--slate2);color:var(--chalk);border:1px solid var(--btn-border);
-  border-radius:5px;padding:14px;font:16px/1.6 ui-monospace,Consolas,monospace;tab-size:2;
-  transition:background .3s,color .3s,border-color .3s}
-#src:focus{outline:none;border-color:var(--new)}
-#editor details{font:14px/1.7 system-ui,sans-serif;color:var(--dim)}
-#editor summary{cursor:pointer;color:var(--chalk)}
-#editor code{font:13px ui-monospace,monospace;color:var(--new)}
-.guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 18px;margin:6px 0 4px}
-
-/* ── Welcome card ──────────────────────────────────────────── */
-#help{max-width:600px;width:calc(100% - 32px);padding:26px 28px;border:1px solid var(--border);border-radius:10px;
-  background:var(--slate2);color:var(--chalk);font:15px/1.55 system-ui,sans-serif}
+/* ── Welcome / help card ── */
+#help{max-width:620px;width:calc(100% - 32px);max-height:calc(100% - 32px);padding:26px 28px;
+  border:1px solid var(--border);border-radius:10px;background:var(--slate2);color:var(--chalk);font:15px/1.55 system-ui,sans-serif}
 #help::backdrop{background:rgba(0,0,0,.6)}
 #help h2{font:400 26px "Cambria","Georgia",serif;margin:0 0 4px}
 #help .lead{color:var(--dim);margin:0 0 18px}
-#help ol{list-style:none;padding:0;margin:0 0 16px;display:grid;gap:12px}
+#help ol{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:12px}
 #help li b{color:var(--new)}
-#help .small{font-size:13px;color:var(--dim);margin:0 0 18px}
-#help code{font:14px ui-monospace,monospace;color:var(--new)}
+#help .small{font-size:13px;color:var(--dim);margin:0 0 14px}
+#help details{margin:0 0 18px;font-size:14px;color:var(--dim)}
+#help summary{cursor:pointer;color:var(--chalk)}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 16px;margin-top:8px}
+kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-radius:3px;padding:0 4px;color:var(--chalk)}
 button.primary,button.primary:hover,button.primary:focus-visible{background:var(--new);color:var(--slate);border-color:var(--new)}
 button.primary:hover{opacity:.88}
 button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
 
-/* ── Library Overlay ───────────────────────────────────────── */
-#library{position:fixed;inset:0;z-index:10;background:var(--slate);display:flex;flex-direction:column;
-  padding:16px 20px calc(16px + env(safe-area-inset-bottom));transition:background .3s}
-#library .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
-#lib-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
-.lib-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:6px;cursor:pointer;
-  font:15px/1.4 system-ui,sans-serif;color:var(--chalk);border:1px solid transparent;
-  transition:background .15s,border-color .15s}
-.lib-item:hover{background:var(--slate2);border-color:var(--border)}
-.lib-item.active{border-color:var(--new);background:var(--slate2)}
-.lib-name{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lib-meta{font:12px system-ui,sans-serif;color:var(--dim);white-space:nowrap}
-.lib-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
-.lib-item:hover .lib-actions,.lib-item.active .lib-actions{opacity:1}
-.lib-actions button{padding:4px 8px;font-size:12px;border-color:transparent}
-.lib-actions button:hover{color:var(--new);border-color:transparent}
-
-@media(prefers-reduced-motion:reduce){.step{transition:none}#progress .fill{transition:none}}
-
-/* ── Mobile ────────────────────────────────────────────────── */
+/* ── Phones: one swipeable row, drawing tools first, so the board keeps the screen ── */
 @media(max-width:760px){
-  .wrap{grid-template-columns:1fr;grid-template-rows:1fr auto}
-  #board{padding:18px 16px 14px}
-  #board h1{font-size:calc(22px * var(--scale))}
-  #board .sub{margin-bottom:16px}
-  .step{font-size:calc(20px * var(--scale));margin-bottom:12px}
-  .step.q{font-size:calc(18px * var(--scale));padding-left:10px}
-  .step.note,.why{font-size:calc(14px * var(--scale))}
-  aside{border-left:0;border-top:1px solid var(--border);padding:10px 12px calc(10px + env(safe-area-inset-bottom));
-    flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px;max-height:40vh}
-  #clock{font-size:20px}
-  aside ol{order:9;width:100%;display:flex;gap:6px;overflow-x:auto;padding:0;list-style:none}
-  aside li{white-space:nowrap;border:1px solid var(--btn-border);border-radius:5px;padding:5px 9px}
-  .keys{display:none}
-  button{padding:10px 14px}
-  #progress{height:8px}
-  #progress:hover{height:12px}
-  .lib-actions{opacity:1}
+  #bar{flex-wrap:nowrap;overflow-x:auto;gap:8px;scrollbar-width:none}
+  .spacer,.sep{display:none}
+  .tools{order:-1}
 }
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 
 <div class="wrap">
-  <main id="board">
-    <div id="page">
-      <h1 id="title"></h1>
-      <p class="sub" id="sub"></p>
-      <div id="steps"></div>
-      <canvas id="ink"></canvas>
-    </div>
-    <div id="progress" data-do="B.seek" title="Click to jump to a line">
-      <div class="fill" id="prog-fill"></div>
-    </div>
-  </main>
+  <main id="board"><canvas id="ink" aria-label="Drawing board"></canvas></main>
 
-  <aside>
-    <div>
-      <div id="clock">00:00</div>
-      <button id="tbtn" data-do="Clock.toggle">Start clock</button>
+  <nav id="bar" aria-label="Board tools">
+    <div class="grp">
+      <button data-do="Board.prev" title="Previous page (←, Page Up)" aria-label="Previous page">◀</button>
+      <span id="page-no">1 / 1</span>
+      <button data-do="Board.next" title="Next page (→, Page Down)" aria-label="Next page">▶</button>
+      <button data-do="Board.add" title="New page (N)">+ Page</button>
+      <button data-do="Board.remove" title="Delete this page" aria-label="Delete this page">✕</button>
     </div>
-    <div>
-      <span id="count"></span><br>
-      <button data-do="B.prev">Back</button> <button data-do="B.next">Next line</button>
+    <span class="sep"></span>
+    <div class="grp tools">
+      <button class="sw" data-do="Ink.pick" data-arg="0" title="Chalk (1)" aria-label="Chalk"></button>
+      <button class="sw" data-do="Ink.pick" data-arg="1" title="Yellow (2)" aria-label="Yellow"></button>
+      <button class="sw" data-do="Ink.pick" data-arg="2" title="Blue (3)" aria-label="Blue"></button>
+      <button class="sw" data-do="Ink.pick" data-arg="3" title="Red (4)" aria-label="Red"></button>
     </div>
-    <ol id="nav"></ol>
-    <div class="btn-row">
-      <button data-do="Lib.open">Library</button>
-      <button data-do="Ed.open">Edit</button>
-      <button data-do="Help.open" title="What can Board do? (?)">?</button>
+    <div class="grp tools">
+      <button class="sz" data-do="Ink.size" data-arg="0" title="Thin ([)" aria-label="Thin"><span style="width:5px;height:5px"></span></button>
+      <button class="sz" data-do="Ink.size" data-arg="1" title="Medium" aria-label="Medium"><span style="width:9px;height:9px"></span></button>
+      <button class="sz" data-do="Ink.size" data-arg="2" title="Thick (])" aria-label="Thick"><span style="width:15px;height:15px"></span></button>
+    </div>
+    <div class="grp tools">
+      <button id="duster" data-do="Ink.duster" title="Duster (X)">Duster</button>
+      <button data-do="Ink.undo" title="Undo (Ctrl+Z)">Undo</button>
+      <button data-do="Ink.redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+      <button data-do="Ink.clear" title="Clear this page (C)">Clear</button>
+    </div>
+    <span class="spacer"></span>
+    <div class="grp">
+      <span id="full" class="hidden" title="This device's storage is full. Save your pages, then delete some.">⚠ Storage full</span>
+      <button id="bg" data-do="Bg.cycle" title="Background: plain, grid or lines (G)">Plain</button>
+      <button id="clock" data-do="Clock.toggle" title="Start / pause the clock (T)">▶ 00:00</button>
+      <button data-do="Clock.reset" title="Reset the clock" aria-label="Reset the clock">↺</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button data-do="Board.download" title="Save every page as one picture (S)">Save</button>
+      <button id="theme-btn" data-do="Theme.toggle" title="Chalkboard / whiteboard (W)">☀️ Light</button>
+      <button data-do="Board.fullscreen" title="Full screen (F)" aria-label="Full screen">⛶</button>
+      <button data-do="Help.open" title="Help (?)" aria-label="Help">?</button>
       <button id="install" class="hidden" data-do="App.install" title="Install Board on this device">⬇ Install app</button>
     </div>
-    <div>
-      <div class="btn-row">
-        <button id="pen" data-do="Ink.toggle">Pen off</button>
-        <button id="duster" data-do="Ink.toggleDuster">Duster</button>
-        <button data-do="Ink.undo" title="Undo last stroke">Undo</button>
-        <button data-do="Ink.clear">Clear ink</button>
-      </div>
-      <div style="margin-top:8px" id="sws"></div>
-    </div>
-    <div class="btn-row">
-      <button id="theme-btn" data-do="Theme.toggle">☀️ Light</button>
-      <button class="btn-sm" data-do="Font.down" title="Smaller text">A−</button>
-      <span class="font-ind" id="font-level">100%</span>
-      <button class="btn-sm" data-do="Font.up" title="Larger text">A+</button>
-    </div>
-    <div class="keys">
-      <kbd>Space</kbd>/<kbd>→</kbd> next · <kbd>←</kbd> back<br>
-      <kbd>1</kbd>–<kbd>9</kbd> jump to slide<br>
-      <kbd>D</kbd> pen · <kbd>X</kbd> duster · <kbd>Ctrl+Z</kbd> undo ink · <kbd>C</kbd> clear<br>
-      <kbd>E</kbd> edit · <kbd>L</kbd> library · <kbd>W</kbd> theme<br>
-      <kbd>+</kbd>/<kbd>−</kbd> font · <kbd>T</kbd> clock · <kbd>F</kbd> fullscreen · <kbd>?</kbd> help
-    </div>
-  </aside>
-</div>
-
-<div id="editor" class="hidden">
-  <div class="bar">
-    <button data-do="Ed.close">Done</button>
-    <button data-do="Ed.pickFile">Open file</button>
-    <button data-do="Ed.save">Save file</button>
-    <input type="file" id="file" accept=".txt,.md,text/plain" hidden>
-    <span id="stat"></span>
-  </div>
-  <details open><summary>Format guide: start a line with…</summary>
-    <div class="guide">
-      <div><code># Title</code> new slide</div>
-      <div><code>&gt; text</code> subtitle under the title</div>
-      <div><code>any line</code> a step, revealed one at a time</div>
-      <div><code>? text</code> question for the class</div>
-      <div><code>! text</code> key line in a box</div>
-      <div><code>~ text</code> small note</div>
-      <div><code>step || remark</code> grey side remark</div>
-      <div><code>x^{2}</code> <code>a_{n}</code> superscript, subscript</div>
-      <div><code>&#123;&#123;1|2&#125;&#125;</code> fraction</div>
-      <div><code>[[1, 0; 0, 1]]</code> matrix, rows split by <code>;</code></div>
-      <div><code>~~text~~</code> crossed out</div>
-      <div><code>time: 50</code> first line: lecture length (minutes)</div>
-    </div>
-  </details>
-  <textarea id="src" spellcheck="false" aria-label="Lecture text"></textarea>
-</div>
-
-<div id="library" class="hidden">
-  <div class="bar">
-    <button data-do="Lib.close">Done</button>
-    <button data-do="Lib.create">New lecture</button>
-    <button data-do="Lib.duplicate">Duplicate</button>
-    <button data-do="Lib.exportAll">Backup all</button>
-    <button data-do="Lib.pickFile">Restore</button>
-    <input type="file" id="lib-import" accept=".json" hidden>
-  </div>
-  <div id="lib-list"></div>
+  </nav>
 </div>
 
 <dialog id="help" aria-labelledby="help-title">
   <h2 id="help-title">Board</h2>
-  <p class="lead">Your lecture on screen, one line at a time, like writing on a real board.</p>
+  <p class="lead">A blank board for teaching. Opens instantly, works without internet, no login.</p>
   <ol>
-    <li><b>✍️ Write</b> in plain text. Every line you type becomes one step.
-      <code>#</code> starts a slide, and maths works without LaTeX.</li>
-    <li><b>▶️ Present</b> with Space or →. Each press reveals the next line,
-      so the class follows you instead of reading ahead.</li>
-    <li><b>🖊️ Draw</b> over any slide with the pen, and rub out with the duster. A clock tells you when time is up.</li>
+    <li><b>🖊️ Draw</b> with a mouse, stylus or finger. Pick a colour and a size; the duster rubs out.
+      Undo brings back anything, even a cleared page.</li>
+    <li><b>📄 Pages.</b> + Page gives you a fresh board. Flip with ◀ ▶, the arrow keys or a presentation clicker.
+      Everything stays on this device, even if you close the tab.</li>
+    <li><b>💾 Save &amp; share.</b> Save turns every page into one picture, ready for WhatsApp or Teams.</li>
   </ol>
-  <p class="small">Works without internet once opened · lectures stay on this device · install it as an app.</p>
-  <div class="btn-row">
-    <button class="primary" data-do="Help.tour">Take the 1-minute tour</button>
-    <button data-do="Help.write">Write my own lecture</button>
-    <button data-do="Help.close">Close</button>
+  <p class="small">Grid or ruled lines for maths · a lecture clock · chalkboard or whiteboard · install it as an app.</p>
+  <details><summary>Keyboard shortcuts</summary>
+    <div class="keys">
+      <div><kbd>1</kbd>–<kbd>4</kbd> pen colour</div>
+      <div><kbd>[</kbd> <kbd>]</kbd> thinner / thicker</div>
+      <div><kbd>X</kbd> duster · <kbd>D</kbd> pen</div>
+      <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Shift+Z</kbd> redo</div>
+      <div><kbd>C</kbd> clear page</div>
+      <div><kbd>N</kbd> new page</div>
+      <div><kbd>←</kbd> <kbd>→</kbd> or clicker: flip pages</div>
+      <div><kbd>G</kbd> plain / grid / lines</div>
+      <div><kbd>T</kbd> clock · <kbd>W</kbd> theme</div>
+      <div><kbd>S</kbd> save · <kbd>F</kbd> full screen</div>
+    </div>
+  </details>
+  <div class="grp">
+    <button class="primary" data-do="Help.close" autofocus>Start drawing</button>
   </div>
 </dialog>
 

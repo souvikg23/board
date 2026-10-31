@@ -2,7 +2,7 @@
    Serves from cache instantly, then refreshes the cache in the background,
    so patchy classroom Wi-Fi never stalls a page load. Updates show on the next open.
    Bump VERSION to throw away every old cached file at once. */
-const VERSION = 'board-v2';
+const VERSION = 'board-v3';
 const FILES = ['./', './index.html', './app.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 
