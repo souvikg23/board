@@ -254,7 +254,7 @@ run_test("11. Lecture Library Persistence", test_library)
 # ─────────────────────────────────────────────────────────────
 def test_keyboard_shortcuts():
     # Start from a known state: ink off, pen mode (earlier tests left the duster on)
-    driver.execute_script("Ink.on = false; Ink._setMode('pen'); Ink.cv.classList.remove('on'); Ink._updateBtns();")
+    driver.execute_script("Ink.on = false; Ink.mode = 'pen'; Ink._updateBtns();")
     body = driver.find_element(By.TAG_NAME, "body")
     # Press 'X' for duster
     body.send_keys("x")
@@ -288,11 +288,80 @@ def test_service_worker():
       caches.keys().then(k => Promise.all(k.map(n => caches.open(n).then(c => c.keys()))))
         .then(all => done(all.flat().map(r => new URL(r.url).pathname)));
     """)
-    for f in ["/index.html", "/manifest.webmanifest", "/icons/icon-192.png"]:
+    for f in ["/index.html", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png"]:
         assert any(c.endswith(f) for c in cached), f"{f} not cached for offline use"
 
 driver.set_script_timeout(10)
 run_test("13. Offline Service Worker", test_service_worker)
+
+# ─────────────────────────────────────────────────────────────
+# SECURITY TESTS — each one is a real attack; all must stay harmless
+# ─────────────────────────────────────────────────────────────
+import tempfile
+from selenium.webdriver.common.action_chains import ActionChains
+
+def pwned():
+    return driver.execute_script("return Object.keys(window).filter(k => k.startsWith('__pwn'));")
+
+def test_malicious_backup():
+    evil = {"lectures": [
+        {"id": "a');window.__pwn1=1;('", "name": "id attack", "content": "# A", "modified": 1},
+        {"id": "b1", "name": "\" onmouseover=\"window.__pwn2=1\" x=\"", "content": "# B", "modified": 2},
+        {"id": "c1", "name": "<img src=x onerror=window.__pwn3=1>", "content": "# C", "modified": 3},
+        {"id": "d1", "name": "wrong types", "content": {"x": 1}, "modified": "zzz"},
+        "not even an object"]}
+    path = os.path.join(tempfile.mkdtemp(), "evil.json")
+    with open(path, "w") as fh:
+        json.dump(evil, fh)
+    driver.execute_script("window.alert = () => {}; window.confirm = () => true; Lib.open();"
+                          "document.getElementById('lib-import').hidden = false;")
+    driver.find_element(By.ID, "lib-import").send_keys(path)
+    time.sleep(0.7)
+    driver.execute_script("Lib.open();")
+    n = len(driver.find_elements(By.CSS_SELECTOR, ".lib-item"))
+    assert n >= 4, f"Library should list the 3 valid lectures plus existing ones, got {n}"
+    for i in range(n):                      # hover and click every entry
+        driver.execute_script("Lib.open();")
+        name = driver.find_elements(By.CSS_SELECTOR, ".lib-item .lib-name")[i]
+        ActionChains(driver).move_to_element(name).click(name).perform()
+    assert not pwned(), f"Backup file ran code: {pwned()}"
+    ids = driver.execute_script("return LIBRARY.lectures.map(l => l.id);")
+    assert all(i.isalnum() for i in ids), f"Unsafe id stored: {ids}"
+    driver.execute_script("Lib.close(); document.getElementById('lib-import').hidden = true;")
+
+run_test("14. Security: malicious backup file", test_malicious_backup)
+
+def test_malicious_lecture_text():
+    attack = ("# <img src=x onerror=window.__pwn4=1>\\n"
+              "<script>window.__pwn5=1</script>\\n"
+              "[[<svg onload=window.__pwn6=1>; a&b, c<d]] || <b onclick=window.__pwn7=1>x</b>\\n"
+              "{{<i>1</i>|2}} x^{<u>2</u>} ~~<s>z</s>~~")
+    driver.execute_script(f"Ed.open(); document.getElementById('src').value = `{attack}`; Ed.close();"
+                          "B.next(); B.next(); B.next();")
+    assert not pwned(), f"Lecture text ran code: {pwned()}"
+    tags = driver.execute_script("return [...document.querySelectorAll('#page img,#page script,#page svg,#page b,#page i,#page u,#page s')].length;")
+    assert tags == 0, f"Lecture text created {tags} HTML elements"
+    title = driver.find_element(By.ID, "title").text
+    assert "<img" in title, f"Title should show the text literally, got {title!r}"
+    cells = driver.execute_script("return [...document.querySelectorAll('.mx td')].map(td => td.textContent);")
+    assert "a&b" in cells and "c<d" in cells, f"Matrix cells mangled by escaping: {cells}"
+
+run_test("15. Security: malicious lecture text", test_malicious_lecture_text)
+
+def test_csp_blocks_inline_script():
+    csp = driver.execute_script("return document.querySelector('meta[http-equiv=Content-Security-Policy]')?.content || '';")
+    script_src = next((d for d in csp.split(";") if d.strip().startswith("script-src")), "")
+    assert script_src and "unsafe" not in script_src, f"script-src missing or weakened: {csp!r}"
+    # Simulate a future bug that lets markup through: the browser must still refuse to run it
+    driver.execute_script("document.getElementById('steps').insertAdjacentHTML('beforeend',"
+                          "'<img src=\"data:,\" onerror=\"window.__pwn8=1\" onload=\"window.__pwn8=1\">');")
+    time.sleep(0.3)
+    driver.get_log('browser')               # the CSP violation report is expected here
+    assert not pwned(), f"Inline handler ran despite CSP: {pwned()}"
+    inline = driver.execute_script("return document.querySelectorAll('[onclick],[onchange],[oninput],[onload],[onerror]').length;")
+    assert inline <= 1, "Inline event handlers found in the page; use data-do instead"
+
+run_test("16. Security: CSP blocks inline script", test_csp_blocks_inline_script)
 
 # Restore default lecture in library
 driver.execute_script("""

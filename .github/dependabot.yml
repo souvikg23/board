@@ -1,0 +1,7 @@
+# Keeps the pinned GitHub Actions above up to date (opens a PR when a new version ships).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

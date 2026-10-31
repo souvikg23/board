@@ -1,0 +1,58 @@
+# Runs on every push to main and on every pull request (including from forks).
+# A change only goes green if the app still works AND nothing in the security tests or scan breaks.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '23 4 * * 1'   # weekly re-scan: catches newly published CodeQL rules
+  workflow_dispatch:
+
+permissions:
+  contents: read           # least privilege; jobs ask for more only if they need it
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (function + security)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Syntax check
+        run: node --check app.js && node --check sw.js
+      - name: Install Selenium
+        run: pip install selenium==4.52.0
+      - name: Run test suite
+        run: |
+          python -m http.server 8080 --bind 127.0.0.1 &
+          sleep 1
+          python tests/run_full_test_suite.py
+
+  codeql:
+    name: CodeQL security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write   # to post findings in the Security tab and on PRs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1

@@ -21,12 +21,16 @@ Press **Edit lecture** (or E). Lectures are plain text; the format guide is insi
 Your lecture is kept on that device. Use **Save file** / **Open file** to move lectures between devices or share them.
 
 ## Updating the app itself
-Edit `index.html`, then change `VERSION` in `sw.js` (e.g. `board-v1` → `board-v2`) and push.
-Installed copies pick it up the next time they open while online.
+Code lives in `app.js`, layout and styles in `index.html`. Edit, push, done:
+installed copies fetch the new version in the background and show it on the next open.
+Bump `VERSION` in `sw.js` only if you add or rename files.
 
 Double-clicking `index.html` on a PC still works offline without installing.
 
 ## Tests
+Every push and pull request runs these automatically (GitHub → **Actions** tab):
+the functional tests, attack tests for the known injection paths, and a CodeQL security scan.
+To run the tests locally:
 ```
 python -m http.server 8080          # in this folder
 python tests/run_full_test_suite.py # needs: pip install selenium, plus Chrome

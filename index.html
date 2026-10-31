@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Board</title>
 <meta name="description" content="Offline lecture board. No internet, no login, just open and go.">
 <meta name="theme-color" content="#1F2B26">
@@ -15,13 +16,13 @@
 /* ── Design Tokens ─────────────────────────────────────────── */
 :root{
   --slate:#1F2B26; --slate2:#26352F; --chalk:#ECEAE2; --dim:#9FA89F;
-  --new:#F2D16B; --note:#8EC5E8; --cancel:#F29E9E; --ok:#A8D8A0;
+  --new:#F2D16B; --note:#8EC5E8; --cancel:#F29E9E;
   --border:#34463E; --btn-border:#5B6E64;
   --scale:1;
 }
 [data-theme="light"]{
   --slate:#F5F3EE; --slate2:#E8E5DD; --chalk:#1F2B26; --dim:#6B7B6B;
-  --new:#B8860B; --note:#2171A5; --cancel:#C0392B; --ok:#27864A;
+  --new:#B8860B; --note:#2171A5; --cancel:#C0392B;
   --border:#C8C4B8; --btn-border:#A0A090;
 }
 
@@ -126,8 +127,6 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
 .lib-item:hover .lib-actions,.lib-item.active .lib-actions{opacity:1}
 .lib-actions button{padding:4px 8px;font-size:12px;border-color:transparent}
 .lib-actions button:hover{color:var(--new);border-color:transparent}
-.lib-rename{background:transparent;color:var(--chalk);border:1px solid var(--new);border-radius:4px;
-  font:600 15px system-ui,sans-serif;padding:4px 8px;outline:none;width:100%}
 
 @media(prefers-reduced-motion:reduce){.step{transition:none}#progress .fill{transition:none}}
 
@@ -155,9 +154,6 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════════
-     MAIN LAYOUT
-     ═══════════════════════════════════════════════════════════ -->
 <div class="wrap">
   <main id="board">
     <div id="page">
@@ -166,7 +162,7 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
       <div id="steps"></div>
       <canvas id="ink"></canvas>
     </div>
-    <div id="progress" onclick="Prog.click(event)" title="Click to jump to a line">
+    <div id="progress" data-do="B.seek" title="Click to jump to a line">
       <div class="fill" id="prog-fill"></div>
     </div>
   </main>
@@ -174,31 +170,31 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
   <aside>
     <div>
       <div id="clock">00:00</div>
-      <button id="tbtn" onclick="Clock.toggle()">Start clock</button>
+      <button id="tbtn" data-do="Clock.toggle">Start clock</button>
     </div>
     <div>
       <span id="count"></span><br>
-      <button onclick="B.prev()">Back</button> <button onclick="B.next()">Next line</button>
+      <button data-do="B.prev">Back</button> <button data-do="B.next">Next line</button>
     </div>
     <ol id="nav"></ol>
     <div class="btn-row">
-      <button onclick="Lib.open()">Library</button>
-      <button onclick="Ed.open()">Edit</button>
+      <button data-do="Lib.open">Library</button>
+      <button data-do="Ed.open">Edit</button>
     </div>
     <div>
       <div class="btn-row">
-        <button id="pen" onclick="Ink.toggle()">Pen off</button>
-        <button id="duster" onclick="Ink.toggleDuster()">Duster</button>
-        <button onclick="Ink.undo()" title="Undo last stroke">Undo</button>
-        <button onclick="Ink.clear()">Clear ink</button>
+        <button id="pen" data-do="Ink.toggle">Pen off</button>
+        <button id="duster" data-do="Ink.toggleDuster">Duster</button>
+        <button data-do="Ink.undo" title="Undo last stroke">Undo</button>
+        <button data-do="Ink.clear">Clear ink</button>
       </div>
       <div style="margin-top:8px" id="sws"></div>
     </div>
     <div class="btn-row">
-      <button id="theme-btn" onclick="Theme.toggle()">☀️ Light</button>
-      <button class="btn-sm" onclick="Font.down()" title="Smaller text">A−</button>
+      <button id="theme-btn" data-do="Theme.toggle">☀️ Light</button>
+      <button class="btn-sm" data-do="Font.down" title="Smaller text">A−</button>
       <span class="font-ind" id="font-level">100%</span>
-      <button class="btn-sm" onclick="Font.up()" title="Larger text">A+</button>
+      <button class="btn-sm" data-do="Font.up" title="Larger text">A+</button>
     </div>
     <div class="keys">
       <kbd>Space</kbd>/<kbd>→</kbd> next · <kbd>←</kbd> back<br>
@@ -210,15 +206,12 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
   </aside>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     EDITOR OVERLAY
-     ═══════════════════════════════════════════════════════════ -->
 <div id="editor" class="hidden">
   <div class="bar">
-    <button onclick="Ed.close()">Done</button>
-    <button onclick="document.getElementById('file').click()">Open file</button>
-    <button onclick="Ed.save()">Save file</button>
-    <input type="file" id="file" accept=".txt,.md,text/plain" hidden onchange="Ed.load(this)">
+    <button data-do="Ed.close">Done</button>
+    <button data-do="Ed.pickFile">Open file</button>
+    <button data-do="Ed.save">Save file</button>
+    <input type="file" id="file" accept=".txt,.md,text/plain" hidden>
     <span id="stat"></span>
   </div>
   <details><summary>How to write a lecture</summary>
@@ -230,606 +223,21 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
     <code>[[1, 0; 0, 1]]</code> matrix (rows split by <code>;</code>) · <code>~~text~~</code> crossed out<br>
     <code>time: 50</code> on the first line turns the clock red after 50 minutes (default 30)
   </details>
-  <textarea id="src" oninput="Ed.stat()" spellcheck="false" aria-label="Lecture text"></textarea>
+  <textarea id="src" spellcheck="false" aria-label="Lecture text"></textarea>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     LIBRARY OVERLAY
-     ═══════════════════════════════════════════════════════════ -->
 <div id="library" class="hidden">
   <div class="bar">
-    <button onclick="Lib.close()">Done</button>
-    <button onclick="Lib.create()">New lecture</button>
-    <button onclick="Lib.duplicate()">Duplicate</button>
-    <button onclick="Lib.exportAll()">Backup all</button>
-    <button onclick="document.getElementById('lib-import').click()">Restore</button>
-    <input type="file" id="lib-import" accept=".json" hidden onchange="Lib.importAll(this)">
+    <button data-do="Lib.close">Done</button>
+    <button data-do="Lib.create">New lecture</button>
+    <button data-do="Lib.duplicate">Duplicate</button>
+    <button data-do="Lib.exportAll">Backup all</button>
+    <button data-do="Lib.pickFile">Restore</button>
+    <input type="file" id="lib-import" accept=".json" hidden>
   </div>
   <div id="lib-list"></div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     JAVASCRIPT — zero dependencies, zero build
-     ═══════════════════════════════════════════════════════════ -->
-<script>
-/* ── Inline formatting helpers ─────────────────────────────── */
-const fr=(n,d)=>`<span class="fr"><span>${n}</span><span>${d}</span></span>`;
-const mx=r=>`<span class="mx"><table>${r.map(x=>'<tr>'+x.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')}</table></span>`;
-const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const inl=t=>esc(t)
-  .replace(/\[\[(.+?)\]\]/g,(_,m)=>mx(m.split(';').map(r=>r.trim().split(/\s*,\s*|\s+/).filter(Boolean))))
-  .replace(/\{\{(.+?)\|(.+?)\}\}/g,(_,n,d)=>fr(n,d))
-  .replace(/\^\{(.+?)\}/g,'<sup>$1</sup>').replace(/_\{(.+?)\}/g,'<sub>$1</sub>')
-  .replace(/~~(.+?)~~/g,'<span class="x">$1</span>');
-const fmt=t=>{ const [m,...w]=t.split('||');
-  return inl(m.trim())+(w.length?`<span class="why">${inl(w.join('||').trim())}</span>`:''); };
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-
-/* ── Parser ────────────────────────────────────────────────── */
-function parse(txt){
-  const L={time:30,slides:[]}; let cur=null;
-  for(const raw of txt.split(/\r?\n/)){
-    const l=raw.trim(); if(!l) continue;
-    const tm=l.match(/^time:\s*(\d+)\s*$/i);
-    if(tm && !L.slides.length){ L.time=+tm[1]; continue; }
-    if(l[0]==='#'){ cur={t:fmt(l.replace(/^#+\s*/,'')),s:'',st:[]}; L.slides.push(cur); continue; }
-    if(!cur){ cur={t:'',s:'',st:[]}; L.slides.push(cur); }
-    const r=l.slice(1).trim();
-    if(l[0]==='>') cur.s=r;
-    else if(l[0]==='?') cur.st.push(['q',fmt(r)]);
-    else if(l[0]==='!') cur.st.push(['key',fmt(r)]);
-    else if(l[0]==='~' && l[1]!=='~') cur.st.push(['note',fmt(r)]);
-    else cur.st.push(['line',fmt(l.replace(/^-\s+/,''))]);
-  }
-  if(!L.slides.length) L.slides.push({t:'Empty board',s:'Press Edit to start writing',st:[]});
-  return L;
-}
-
-const STARTER=`time: 50
-
-# Welcome to Board
-> Press Space, or Next line, to reveal
-? What happens when you press Next line?
-Each line appears one at a time
-The newest line is highlighted || older lines fade back
-! Boxed lines hold the key result
-~ Notes appear in small blue text.
-
-# Pen and clock
-> Draw over any slide
-Turn the pen on with D, or the Pen button
-Ink stays on its own slide || Clear ink wipes it
-The clock turns red when your lecture time is up
-
-# Your turn
-> Press Edit to see how this was written
-Slides, questions, notes and key lines are plain text
-Maths works too: x^{2} + y^{2}, a_{n}, {{1|2}}
-[[1, 0; 0, 1]] || a matrix
-~~Wrong step~~ crossed out, then corrected
-! Replace this text with your own lecture`;
-
-/* ══════════════════════════════════════════════════════════════
-   STORAGE — localStorage backed, structured library
-   ══════════════════════════════════════════════════════════════ */
-const Store={
-  _g(k){ try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;} },
-  _s(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} },
-
-  /* one-time migration from old single-key format */
-  migrate(){
-    const old=(()=>{try{return localStorage.getItem('board.lecture');}catch(e){return null;}})();
-    if(old!==null){
-      const id=uid();
-      const lib={lectures:[{id,name:this._nameFrom(old),content:old,modified:Date.now()}],activeId:id};
-      this._s('board.library',lib);
-      try{localStorage.removeItem('board.lecture');}catch(e){}
-    }
-  },
-
-  _nameFrom(txt){
-    const m=txt.match(/^#\s*(.+)$/m);
-    return m?m[1].trim().slice(0,60):'Untitled';
-  },
-
-  getLibrary(){
-    let lib=this._g('board.library');
-    if(!lib||!lib.lectures||!lib.lectures.length){
-      const id=uid();
-      lib={lectures:[{id,name:'Welcome',content:STARTER,modified:Date.now()}],activeId:id};
-      this._s('board.library',lib);
-    }
-    if(!lib.activeId) lib.activeId=lib.lectures[0].id;
-    return lib;
-  },
-
-  saveLibrary(lib){ this._s('board.library',lib); },
-
-  getPrefs(){ return this._g('board.prefs')||{theme:'dark',fontLevel:2}; },
-  savePrefs(p){ this._s('board.prefs',p); }
-};
-
-Store.migrate();
-let LIBRARY=Store.getLibrary();
-let PREFS=Store.getPrefs();
-
-function activeLec(){ return LIBRARY.lectures.find(l=>l.id===LIBRARY.activeId)||LIBRARY.lectures[0]; }
-let SRC=activeLec().content, LEC=parse(SRC), SLIDES=LEC.slides;
-
-/* ══════════════════════════════════════════════════════════════
-   THEME
-   ══════════════════════════════════════════════════════════════ */
-const Theme={
-  init(){
-    document.documentElement.setAttribute('data-theme',PREFS.theme);
-    this._meta();
-    this._btn();
-  },
-  toggle(){
-    PREFS.theme=PREFS.theme==='dark'?'light':'dark';
-    Store.savePrefs(PREFS);
-    document.documentElement.setAttribute('data-theme',PREFS.theme);
-    this._meta(); this._btn();
-    Ink.updatePalette();
-  },
-  _meta(){
-    const m=document.querySelector('meta[name="theme-color"]');
-    if(m) m.content=PREFS.theme==='dark'?'#1F2B26':'#F5F3EE';
-  },
-  _btn(){
-    const b=document.getElementById('theme-btn');
-    b.textContent=PREFS.theme==='dark'?'☀️ Light':'🌙 Dark';
-    b.title=PREFS.theme==='dark'?'Switch to whiteboard':'Switch to chalkboard';
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   FONT SIZE
-   ══════════════════════════════════════════════════════════════ */
-const FSTEPS=[0.75,0.875,1,1.25,1.5];
-const FLABELS=['75%','88%','100%','125%','150%'];
-const Font={
-  init(){
-    if(PREFS.fontLevel==null||PREFS.fontLevel<0||PREFS.fontLevel>=FSTEPS.length) PREFS.fontLevel=2;
-    this._apply();
-  },
-  up(){ if(PREFS.fontLevel<FSTEPS.length-1){ PREFS.fontLevel++; this._apply(); Store.savePrefs(PREFS); } },
-  down(){ if(PREFS.fontLevel>0){ PREFS.fontLevel--; this._apply(); Store.savePrefs(PREFS); } },
-  _apply(){
-    document.documentElement.style.setProperty('--scale',FSTEPS[PREFS.fontLevel]);
-    document.getElementById('font-level').textContent=FLABELS[PREFS.fontLevel];
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   EDITOR
-   ══════════════════════════════════════════════════════════════ */
-const Ed={
-  open(){
-    document.getElementById('src').value=SRC;
-    document.getElementById('editor').classList.remove('hidden');
-    document.getElementById('src').focus();
-    this.stat();
-  },
-  close(){
-    const v=document.getElementById('src').value;
-    document.getElementById('editor').classList.add('hidden');
-    if(v!==SRC){
-      SRC=v; LEC=parse(v); SLIDES=LEC.slides;
-      Ink.strokes={}; Ink.undone={};
-      B.i=0; B.n=0;
-      /* persist to library */
-      const lec=activeLec();
-      lec.content=v;
-      lec.name=Store._nameFrom(v);
-      lec.modified=Date.now();
-      Store.saveLibrary(LIBRARY);
-    }
-    B.render();
-  },
-  stat(){
-    const L=parse(document.getElementById('src').value);
-    document.getElementById('stat').textContent=
-      `${L.slides.length} slide${L.slides.length===1?'':'s'} · saved on this device`;
-  },
-  save(){
-    const v=document.getElementById('src').value;
-    const name=(v.match(/^#\s*(.+)$/m)?.[1]||'lecture').replace(/[^\w\- ]+/g,'').trim().slice(0,60)||'lecture';
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([v],{type:'text/plain'}));
-    a.download=name+'.txt'; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  },
-  load(inp){
-    const f=inp.files[0]; if(!f) return;
-    f.text().then(t=>{document.getElementById('src').value=t;this.stat();}); inp.value='';
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   LIBRARY — multi-lecture management
-   ══════════════════════════════════════════════════════════════ */
-const Lib={
-  open(){
-    document.getElementById('library').classList.remove('hidden');
-    this._render();
-  },
-  close(){
-    document.getElementById('library').classList.add('hidden');
-  },
-
-  _render(){
-    const el=document.getElementById('lib-list');
-    const sorted=[...LIBRARY.lectures].sort((a,b)=>(b.modified||0)-(a.modified||0));
-    el.innerHTML=sorted.map(lec=>{
-      const act=lec.id===LIBRARY.activeId;
-      const d=lec.modified?new Date(lec.modified).toLocaleDateString(undefined,
-        {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-      const sc=parse(lec.content).slides.length;
-      return `<div class="lib-item${act?' active':''}" data-id="${lec.id}" onclick="Lib.select('${lec.id}')">
-        <div class="lib-name" title="${esc(lec.name)}">${esc(lec.name)}</div>
-        <div class="lib-meta">${sc} slide${sc!==1?'s':''} · ${d}</div>
-        <div class="lib-actions">
-          <button onclick="event.stopPropagation();Lib.rename('${lec.id}')" title="Rename">✏️</button>
-          <button onclick="event.stopPropagation();Lib.remove('${lec.id}')" title="Delete">🗑️</button>
-        </div>
-      </div>`;
-    }).join('');
-  },
-
-  select(id){
-    LIBRARY.activeId=id;
-    Store.saveLibrary(LIBRARY);
-    SRC=activeLec().content;
-    LEC=parse(SRC); SLIDES=LEC.slides;
-    Ink.strokes={}; Ink.undone={};
-    B.i=0; B.n=0;
-    B.render();
-    this._render();
-  },
-
-  create(){
-    const lec={id:uid(),name:'Untitled',content:'# New Lecture\n> Start writing here\n',modified:Date.now()};
-    LIBRARY.lectures.push(lec);
-    Store.saveLibrary(LIBRARY);
-    this.select(lec.id);
-  },
-
-  duplicate(){
-    const cur=activeLec();
-    const lec={id:uid(),name:cur.name+' (copy)',content:cur.content,modified:Date.now()};
-    LIBRARY.lectures.push(lec);
-    Store.saveLibrary(LIBRARY);
-    this.select(lec.id);
-  },
-
-  rename(id){
-    const lec=LIBRARY.lectures.find(l=>l.id===id);
-    if(!lec) return;
-    const row=document.querySelector(`.lib-item[data-id="${id}"] .lib-name`);
-    if(!row) return;
-    const safe=lec.name.replace(/"/g,'&quot;');
-    row.innerHTML=`<input class="lib-rename" value="${safe}"
-      onblur="Lib._finishRename('${id}',this)"
-      onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}">`;
-    const inp=row.querySelector('input');
-    inp.focus(); inp.select();
-  },
-
-  _finishRename(id,inp){
-    if(inp.dataset.cancel){ this._render(); return; }
-    const lec=LIBRARY.lectures.find(l=>l.id===id);
-    if(!lec) return;
-    lec.name=inp.value.trim()||'Untitled';
-    lec.modified=Date.now();
-    Store.saveLibrary(LIBRARY);
-    this._render();
-  },
-
-  remove(id){
-    if(LIBRARY.lectures.length<=1){alert('Cannot delete the only lecture.');return;}
-    const lec=LIBRARY.lectures.find(l=>l.id===id);
-    if(!lec||!confirm(`Delete "${lec.name}"?`)) return;
-    LIBRARY.lectures=LIBRARY.lectures.filter(l=>l.id!==id);
-    if(LIBRARY.activeId===id){
-      LIBRARY.activeId=LIBRARY.lectures[0].id;
-      SRC=activeLec().content; LEC=parse(SRC); SLIDES=LEC.slides;
-      Ink.strokes={}; Ink.undone={}; B.i=0; B.n=0; B.render();
-    }
-    Store.saveLibrary(LIBRARY);
-    this._render();
-  },
-
-  /* ── Backup / Restore ─────────────────────────────────────── */
-  exportAll(){
-    const blob=new Blob([JSON.stringify(LIBRARY,null,2)],{type:'application/json'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='board-backup-'+new Date().toISOString().slice(0,10)+'.json';
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  },
-  importAll(inp){
-    const f=inp.files[0]; if(!f) return;
-    f.text().then(t=>{
-      try{
-        const data=JSON.parse(t);
-        if(!data.lectures||!data.lectures.length) throw new Error('No lectures found in file');
-        let added=0;
-        for(const lec of data.lectures){
-          if(!LIBRARY.lectures.find(l=>l.id===lec.id)){
-            LIBRARY.lectures.push(lec); added++;
-          }
-        }
-        if(added===0 && confirm(`All ${data.lectures.length} lecture(s) already exist. Replace entire library?`)){
-          LIBRARY.lectures=data.lectures;
-          LIBRARY.activeId=data.activeId||data.lectures[0].id;
-          added=data.lectures.length;
-        }
-        Store.saveLibrary(LIBRARY);
-        if(added) this.select(LIBRARY.activeId||LIBRARY.lectures[0].id);
-        this._render();
-        alert(`Restored ${added} lecture(s).`);
-      }catch(e){alert('Could not read backup: '+e.message);}
-    });
-    inp.value='';
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   BOARD — slide & line navigation
-   ══════════════════════════════════════════════════════════════ */
-const B={i:0,n:0,
-  render(){
-    const S=SLIDES[this.i];
-    document.getElementById('title').innerHTML=S.t;
-    document.getElementById('sub').textContent=S.s;
-    document.getElementById('steps').innerHTML=S.st.map(([c,h],j)=>
-      `<div class="step ${c} ${j<this.n?'':'hidden'} ${j===this.n-1?'latest':''}">${h}</div>`).join('');
-    document.getElementById('count').textContent=`Line ${this.n} / ${S.st.length}`;
-    document.getElementById('nav').innerHTML=SLIDES.map((s,j)=>
-      `<li class="${j===this.i?'cur':''}" onclick="B.go(${j})">${s.t.split(' · ')[0]}</li>`).join('');
-    Ink.redraw();
-    Prog.update();
-  },
-  next(){
-    const L=SLIDES[this.i].st.length;
-    if(this.n<L) this.n++; else if(this.i<SLIDES.length-1){this.i++;this.n=0;}
-    this.render();
-  },
-  prev(){
-    if(this.n>0) this.n--; else if(this.i>0){this.i--;this.n=SLIDES[this.i].st.length;}
-    this.render();
-  },
-  go(j){ if(j>=SLIDES.length) return; this.i=j; this.n=0; this.render(); }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   PROGRESS BAR
-   ══════════════════════════════════════════════════════════════ */
-const Prog={
-  update(){
-    const total=SLIDES[B.i].st.length;
-    const pct=total?Math.round((B.n/total)*100):100;
-    document.getElementById('prog-fill').style.width=pct+'%';
-  },
-  click(e){
-    const bar=document.getElementById('progress');
-    const rect=bar.getBoundingClientRect();
-    const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
-    B.n=Math.round(pct*SLIDES[B.i].st.length);
-    B.render();
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   CLOCK
-   ══════════════════════════════════════════════════════════════ */
-const Clock={t0:null,acc:0,h:null,
-  toggle(){
-    const b=document.getElementById('tbtn');
-    if(this.h){
-      this.acc+=Date.now()-this.t0;
-      clearInterval(this.h); this.h=null;
-      b.textContent='Resume clock'; Wake.off();
-    } else {
-      this.t0=Date.now();
-      this.h=setInterval(()=>this.show(),500);
-      b.textContent='Pause clock'; Wake.on();
-    }
-  },
-  show(){
-    const s=Math.floor((this.acc+(this.h?Date.now()-this.t0:0))/1000);
-    const el=document.getElementById('clock');
-    el.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
-    el.style.color=s>=LEC.time*60?'var(--cancel)':'';
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   INK — pen drawing with undo / redo
-   ══════════════════════════════════════════════════════════════ */
-const Ink={
-  on:false, mode:'pen', col:null, strokes:{}, undone:{}, cur:null, cv:null,
-  darkCols:['#F2D16B','#ECEAE2','#8EC5E8','#F29E9E'],
-  lightCols:['#B8860B','#1F2B26','#2171A5','#C0392B'],
-  cols:null,
-
-  init(){
-    this.cols=PREFS.theme==='dark'?this.darkCols:this.lightCols;
-    this.col=this.cols[0];
-    this.cv=document.getElementById('ink');
-    const pg=document.getElementById('page');
-    const fit=()=>{
-      const d=devicePixelRatio||1;
-      this.cv.width=Math.round(pg.offsetWidth*d);
-      this.cv.height=Math.round(pg.offsetHeight*d);
-      this.redraw();
-    };
-    new ResizeObserver(fit).observe(pg); fit();
-    this._swatches();
-
-    const pos=e=>{const r=this.cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];};
-    this.cv.addEventListener('pointerdown',e=>{
-      if(!this.on) return;
-      if(this.mode==='duster'){
-        this.cur={e:true,p:[pos(e)]};
-      } else {
-        this.cur={c:this.col,p:[pos(e)]};
-      }
-      (this.strokes[B.i]??=[]).push(this.cur);
-      this.undone[B.i]=[];              // new stroke clears redo
-      this.cv.setPointerCapture(e.pointerId);
-    });
-    this.cv.addEventListener('pointermove',e=>{
-      if(this.cur){this.cur.p.push(pos(e));this.redraw();}
-    });
-    this.cv.addEventListener('pointerup',()=>{this.cur=null;});
-  },
-
-  _swatches(){
-    document.getElementById('sws').innerHTML=this.cols.map(c=>
-      `<span class="sw ${c===this.col?'sel':''}" style="background:${c}"
-        onclick="Ink.pick('${c}')" title="pen colour"></span>`).join('');
-  },
-
-  updatePalette(){
-    const oldCols=PREFS.theme==='dark'?this.lightCols:this.darkCols;
-    this.cols=PREFS.theme==='dark'?this.darkCols:this.lightCols;
-    const idx=oldCols.indexOf(this.col);
-    this.col=idx>=0?this.cols[idx]:this.cols[0];
-    this._swatches();
-  },
-
-  pick(c){
-    this.col=c;
-    document.querySelectorAll('.sw').forEach((s,i)=>s.classList.toggle('sel',this.cols[i]===c));
-    if(this.mode==='duster') this._setMode('pen');
-    if(!this.on) this.toggle();
-  },
-  toggle(){
-    this.on=!this.on;
-    if(!this.on) this._setMode('pen');
-    this.cv.classList.toggle('on',this.on);
-    this._updateBtns();
-  },
-  toggleDuster(){
-    if(!this.on){
-      this.on=true;
-      this.cv.classList.add('on');
-    }
-    this._setMode(this.mode==='duster'?'pen':'duster');
-    this._updateBtns();
-  },
-  _setMode(m){
-    this.mode=m;
-    this.cv.classList.toggle('duster',m==='duster');
-  },
-  _updateBtns(){
-    const p=document.getElementById('pen');
-    const d=document.getElementById('duster');
-    p.textContent=this.on && this.mode==='pen'?'Pen on':'Pen off';
-    p.classList.toggle('on',this.on && this.mode==='pen');
-    d.classList.toggle('on',this.on && this.mode==='duster');
-  },
-
-  /* undo / redo */
-  undo(){
-    const arr=this.strokes[B.i];
-    if(!arr||!arr.length) return;
-    (this.undone[B.i]??=[]).push(arr.pop());
-    this.redraw();
-  },
-  redo(){
-    const arr=this.undone[B.i];
-    if(!arr||!arr.length) return;
-    (this.strokes[B.i]??=[]).push(arr.pop());
-    this.redraw();
-  },
-
-  clear(){ this.strokes[B.i]=[]; this.undone[B.i]=[]; this.redraw(); },
-
-  redraw(){
-    if(!this.cv) return;
-    const g=this.cv.getContext('2d');
-    const d=devicePixelRatio||1;
-    g.setTransform(d,0,0,d,0,0);
-    g.clearRect(0,0,this.cv.width,this.cv.height);
-    g.lineCap='round'; g.lineJoin='round';
-    (this.strokes[B.i]||[]).forEach(s=>{
-      if(s.e){
-        /* duster stroke — erase pixels */
-        g.globalCompositeOperation='destination-out';
-        g.lineWidth=36;
-        g.strokeStyle='rgba(0,0,0,1)';
-      } else {
-        g.globalCompositeOperation='source-over';
-        g.lineWidth=3;
-        g.strokeStyle=s.c;
-      }
-      g.beginPath();
-      s.p.forEach(([x,y],j)=>j?g.lineTo(x,y):g.moveTo(x,y));
-      g.stroke();
-    });
-    g.globalCompositeOperation='source-over';
-  }
-};
-
-/* ══════════════════════════════════════════════════════════════
-   KEYBOARD
-   ══════════════════════════════════════════════════════════════ */
-document.addEventListener('keydown',e=>{
-  /* editor open — only Escape */
-  if(!document.getElementById('editor').classList.contains('hidden')){
-    if(e.key==='Escape') Ed.close(); return;
-  }
-  /* library open — only Escape */
-  if(!document.getElementById('library').classList.contains('hidden')){
-    if(e.key==='Escape') Lib.close(); return;
-  }
-
-  /* Ctrl / Cmd combos */
-  if((e.ctrlKey||e.metaKey) && e.key==='z' && e.shiftKey){ e.preventDefault(); Ink.redo(); return; }
-  if((e.ctrlKey||e.metaKey) && e.key==='z'){ e.preventDefault(); Ink.undo(); return; }
-  if(e.ctrlKey||e.metaKey||e.altKey) return;
-
-  /* plain keys */
-  if(e.key===' '||e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();B.next();}
-  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();B.prev();}
-  else if(/^[1-9]$/.test(e.key)) B.go(+e.key-1);
-  else if(e.key==='e'||e.key==='E'){e.preventDefault();Ed.open();}
-  else if(e.key==='l'||e.key==='L'){e.preventDefault();Lib.open();}
-  else if(e.key==='d'||e.key==='D') Ink.toggle();
-  else if(e.key==='x'||e.key==='X') Ink.toggleDuster();
-  else if(e.key==='c'||e.key==='C') Ink.clear();
-  else if(e.key==='t'||e.key==='T') Clock.toggle();
-  else if(e.key==='w'||e.key==='W') Theme.toggle();
-  else if(e.key==='='||e.key==='+') Font.up();
-  else if(e.key==='-'||e.key==='_') Font.down();
-  else if(e.key==='f'||e.key==='F'){
-    if(!document.fullscreenEnabled) return;
-    document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
-  }
-});
-
-/* ══════════════════════════════════════════════════════════════
-   WAKE LOCK & INIT
-   ══════════════════════════════════════════════════════════════ */
-const Wake={l:null,
-  async on(){try{this.l=await navigator.wakeLock?.request('screen');}catch(e){}},
-  off(){this.l?.release();this.l=null;}};
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Clock.h)Wake.on();});
-
-/* boot */
-Theme.init();
-Font.init();
-Ink.init();
-B.render();
-if('serviceWorker' in navigator && location.protocol!=='file:'){
-  navigator.serviceWorker.register('sw.js').then(reg=>{
-    reg.update();
-  });
-}
-
-</script>
+<script src="app.js"></script>
 </body>
 </html>
