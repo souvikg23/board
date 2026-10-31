@@ -10,11 +10,13 @@ Offline lecture board. Installs as an app on PC (Chrome/Edge) and phones (Androi
 3. Open `https://<username>.github.io/<repo>/`.
 
 ## Install
-- PC (Chrome/Edge): install icon at the right of the address bar.
+Press **⬇ Install app** in Board's sidebar (Chrome, Edge, Brave, Android; on iPhone/iPad it shows the steps). Or:
+- PC (Chrome/Edge/Brave): install icon at the right of the address bar.
 - Android (Chrome): menu → Add to home screen / Install app.
 - iPhone/iPad (Safari): Share → Add to Home Screen.
 
-Open it once while online. After that it runs with no internet.
+Open it once while online. After that it runs with no internet, and everything (lectures, settings)
+stays on that device. Board asks the browser to keep that storage permanently, so it isn't cleared when space runs low.
 
 ## Writing lectures
 Press **Edit lecture** (or E). Lectures are plain text; the format guide is inside the editor.

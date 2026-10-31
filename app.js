@@ -333,10 +333,26 @@ const Ink = {on: false, mode: 'pen', ci: 0, strokes: {}, undone: {}, cur: null, 
   }
 };
 
+/* ── Install ───────────────────────────────────────────────── */
+/* Chrome/Edge/Brave/Android hand us an install prompt; iPhone/iPad never do, so there the
+   button shows the steps instead. The button stays hidden once Board runs as an installed app. */
+const App = {prompt: null,
+  installed: matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true,
+  ios: /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  show(on) { $('install').classList.toggle('hidden', !on || this.installed); },
+  install() {
+    if (!this.prompt) return alert('To install: tap the Share button, then "Add to Home Screen".');
+    this.prompt.prompt();          // a prompt works once; the browser offers a fresh one later if declined
+    this.prompt = null; this.show(false);
+  }
+};
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); App.prompt = e; App.show(true); });
+addEventListener('appinstalled', () => { App.installed = true; App.show(false); });
+
 /* ── Buttons and keys ──────────────────────────────────────── */
 /* Buttons carry data-do="Object.method" (and optional data-arg); no inline handlers,
    so the page can forbid inline script entirely. */
-const ACTIONS = {B, Ed, Lib, Ink, Clock, Theme, Font};
+const ACTIONS = {B, Ed, Lib, Ink, Clock, Theme, Font, App};
 const run = (act, arg, e) => { const [o, m] = act.split('.'); ACTIONS[o]?.[m]?.(arg, e); };
 document.addEventListener('click', e => { const el = e.target.closest('[data-do]'); if (el) run(el.dataset.do, el.dataset.arg, e); });
 $('file').addEventListener('change', e => Ed.load(e.target));
@@ -361,4 +377,8 @@ Ink.init();
 Theme.apply();
 Font._apply();
 show(active().content);
+App.show(App.ios);
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+/* Ask the browser never to clear Board's storage when the device runs low on space,
+   so lectures saved on this device stay there until you delete them. */
+navigator.storage?.persist?.()?.catch(() => {});

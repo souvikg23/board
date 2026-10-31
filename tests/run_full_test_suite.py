@@ -363,6 +363,27 @@ def test_csp_blocks_inline_script():
 
 run_test("16. Security: CSP blocks inline script", test_csp_blocks_inline_script)
 
+# ─────────────────────────────────────────────────────────────
+# TEST 17: Install button
+# ─────────────────────────────────────────────────────────────
+def test_install_button():
+    btn = driver.find_element(By.ID, "install")
+    offered = driver.execute_script("return !!App.prompt;")   # Chrome may already have offered a real install
+    assert btn.is_displayed() == offered, f"Install button visible={btn.is_displayed()} but browser offered install={offered}"
+    # Stand-in for the browser's own install prompt
+    driver.execute_script("""
+      const e = new Event('beforeinstallprompt', {cancelable: true});
+      e.prompt = () => { window.__prompted = true; };
+      dispatchEvent(e);""")
+    assert btn.is_displayed(), "Install button did not appear when install became available"
+    btn.click()
+    assert driver.execute_script("return window.__prompted === true;"), "Install button did not open the install prompt"
+    assert not btn.is_displayed(), "Install button should hide after use"
+    driver.execute_script("dispatchEvent(new Event('beforeinstallprompt')); dispatchEvent(new Event('appinstalled'));")
+    assert not btn.is_displayed(), "Install button should hide once installed"
+
+run_test("17. Install Button", test_install_button)
+
 # Restore default lecture in library
 driver.execute_script("""
   localStorage.clear();
