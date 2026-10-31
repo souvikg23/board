@@ -160,6 +160,28 @@ def test_duster():
 run_test("4. Duster Rubs Out", test_duster)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 4b: Pen switches off, so the board can be touched without marking
+# ─────────────────────────────────────────────────────────────
+def test_pen_toggle():
+    pen = driver.find_element(By.ID, "pen")
+    n = js("return Ink.strokes.length;")
+    pen.click()
+    assert js("return Ink.mode;") == 'off' and "on" not in pen.get_attribute("class"), "Pen button did not switch the pen off"
+    assert pen.get_attribute("aria-pressed") == "false", "Pen button should report it is off to screen readers"
+    stroke([(500, 500), (600, 520), (700, 500)])
+    assert js("return Ink.strokes.length;") == n and alpha(600, 515) == 0, "Pen off still left a mark"
+    press("d")
+    assert js("return Ink.mode;") == 'pen', "D did not turn the pen back on"
+    press("d")
+    driver.find_element(By.CSS_SELECTOR, ".sw[data-arg='0']").click()
+    assert js("return Ink.mode;") == 'pen', "Picking a colour should switch the pen back on"
+    stroke([(500, 500), (600, 520)])
+    assert js("return Ink.strokes.length;") == n + 1, "Pen back on does not draw"
+    js("Ink.undo();")
+
+run_test("4b. Pen On / Off", test_pen_toggle)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 5: Undo / redo, and undoing a Clear
 # ─────────────────────────────────────────────────────────────
 def test_undo_redo_clear():

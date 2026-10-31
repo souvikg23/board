@@ -36,16 +36,17 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--slate);color:var
 #board.grid{background-image:linear-gradient(var(--rule) 1px,transparent 1px),linear-gradient(90deg,var(--rule) 1px,transparent 1px);background-size:40px 40px}
 #board.lines{background-image:linear-gradient(var(--rule) 1px,transparent 1px);background-size:100% 40px}
 #ink{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#ink.off{cursor:default}
 #ink.duster{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect x='4' y='4' width='28' height='28' rx='6' fill='%23888' fill-opacity='.45' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 18 18,auto}
 
 /* ── Toolbar ── */
-#bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+#bar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));
   background:var(--slate2);border-top:1px solid var(--border);transition:background .3s}
-.grp{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.sep{width:1px;height:26px;background:var(--border);margin:0 4px;flex-shrink:0}
+.grp{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.sep{width:1px;height:26px;background:var(--border);margin:0 2px;flex-shrink:0}
 .spacer{flex:1}
 button{font:600 14px system-ui,sans-serif;background:transparent;color:var(--chalk);white-space:nowrap;
-  border:1px solid var(--btn-border);border-radius:6px;padding:7px 11px;cursor:pointer;
+  border:1px solid var(--btn-border);border-radius:6px;padding:7px 9px;cursor:pointer;
   transition:border-color .2s,color .2s,background .2s}
 button:hover,button:focus-visible{border-color:var(--new);color:var(--new);outline:none}
 button.on{background:var(--new);color:var(--slate);border-color:var(--new)}
@@ -54,10 +55,10 @@ button.on{background:var(--new);color:var(--slate);border-color:var(--new)}
 .sw.sel{box-shadow:0 0 0 3px var(--chalk)}
 .sw[data-arg="0"]{background:var(--c0)} .sw[data-arg="1"]{background:var(--c1)}
 .sw[data-arg="2"]{background:var(--c2)} .sw[data-arg="3"]{background:var(--c3)}
-.sz{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center}
+.sz{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center}
 .sz span{display:block;border-radius:50%;background:currentColor}
-#page-no{min-width:52px;text-align:center;font-weight:600}
-#clock{font-family:ui-monospace,monospace;min-width:86px}
+#page-no{min-width:46px;text-align:center;font-weight:600}
+#clock{font-family:ui-monospace,monospace;min-width:80px}
 #full{color:var(--c3);font-weight:600}
 
 /* ── Welcome / help card ── */
@@ -112,7 +113,7 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
       <button class="sz" data-do="Ink.size" data-arg="2" title="Thick (])" aria-label="Thick"><span style="width:15px;height:15px"></span></button>
     </div>
     <div class="grp tools">
-      <button id="pen" data-do="Ink.pen" title="Pen (D)">✏️ Pen</button>
+      <button id="pen" data-do="Ink.pen" title="Pen on / off (D). Off: touch and point without marking">✏️ Pen</button>
       <button id="duster" data-do="Ink.duster" title="Duster (X)">Duster</button>
       <button data-do="Ink.undo" title="Undo (Ctrl+Z)">Undo</button>
       <button data-do="Ink.redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
@@ -131,7 +132,7 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
       <button id="theme-btn" data-do="Theme.toggle" title="Chalkboard / whiteboard (W)">☀️ Light</button>
       <button data-do="Board.fullscreen" title="Full screen (F)" aria-label="Full screen">⛶</button>
       <button data-do="Help.open" title="Help (?)" aria-label="Help">?</button>
-      <button id="install" class="hidden" data-do="App.install" title="Install Board on this device">⬇ Install app</button>
+      <button id="install" class="hidden" data-do="App.install" title="Install Board on this device">⬇ Install</button>
     </div>
   </nav>
 </div>
@@ -141,6 +142,7 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   <p class="lead">A blank board for teaching. Opens instantly, works without internet, no login.</p>
   <ol>
     <li><b>🖊️ Draw</b> with a mouse, stylus or finger. Pick a colour and a size; the duster rubs out.
+      Turn the pen off to point or rest your hand on the board without marking it.
       Undo brings back anything, even a cleared page.</li>
     <li><b>📄 Pages.</b> + Page gives you a fresh board. Flip with ◀ ▶, the arrow keys or a presentation clicker.
       Everything stays on this device, even if you close the tab.</li>
@@ -151,7 +153,7 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
     <div class="keys">
       <div><kbd>1</kbd>–<kbd>4</kbd> pen colour</div>
       <div><kbd>[</kbd> <kbd>]</kbd> thinner / thicker</div>
-      <div><kbd>X</kbd> duster · <kbd>D</kbd> pen</div>
+      <div><kbd>D</kbd> pen on / off · <kbd>X</kbd> duster</div>
       <div><kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+Shift+Z</kbd> redo</div>
       <div><kbd>C</kbd> clear page</div>
       <div><kbd>N</kbd> new page</div>
@@ -166,6 +168,6 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   </div>
 </dialog>
 
-<script src="app.js?v=7baba203f2"></script>
+<script src="app.js?v=ea944f91e0"></script>
 </body>
 </html>

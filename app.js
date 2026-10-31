@@ -49,7 +49,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
     const pos = e => { const r = this.cv.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
     this.cv.addEventListener('pointerdown', e => {
       if (e.pointerType === 'pen') this.penSeen = true;
-      if (this.cur || e.button > 0 || (e.pointerType === 'touch' && this.penSeen)) return;   // one stroke at a time; palm rejection
+      if (this.mode === 'off' || this.cur || e.button > 0 || (e.pointerType === 'touch' && this.penSeen)) return;   // pen off; one stroke at a time; palm rejection
       this.cur = {c: this.mode === 'duster' ? -1 : this.ci, s: this.si, p: [pos(e)]};
       this.pid = e.pointerId;
       this.strokes.push(this.cur);
@@ -104,15 +104,17 @@ const Ink = {mode: 'pen', ci: 0, si: 1, cur: null, pid: null, penSeen: false, co
   clear() { if (this.strokes.length) { this.record({clear: this.strokes.splice(0)}); this.changed(); } },
   /* tools */
   sync() {
-    document.querySelectorAll('.sw').forEach((b, i) => b.classList.toggle('sel', this.mode === 'pen' && i === this.ci));
+    document.querySelectorAll('.sw').forEach((b, i) => b.classList.toggle('sel', this.mode !== 'duster' && i === this.ci));
     document.querySelectorAll('.sz').forEach((b, i) => b.classList.toggle('on', i === this.si));
     $('pen').classList.toggle('on', this.mode === 'pen');
+    $('pen').setAttribute('aria-pressed', this.mode === 'pen');
+    this.cv.classList.toggle('off', this.mode === 'off');
     $('duster').classList.toggle('on', this.mode === 'duster');
     this.cv.classList.toggle('duster', this.mode === 'duster');
   },
   pick(i) { this.ci = +i; this.mode = 'pen'; this.sync(); },
   size(i) { this.si = Math.max(0, Math.min(2, +i)); this.sync(); },
-  pen() { this.mode = 'pen'; this.sync(); },
+  pen() { this.mode = this.mode === 'pen' ? 'off' : 'pen'; this.sync(); },   // off: touch and point without marking
   duster() { this.mode = this.mode === 'duster' ? 'pen' : 'duster'; this.sync(); }
 };
 
