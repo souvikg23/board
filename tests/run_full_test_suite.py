@@ -418,6 +418,50 @@ def test_touch_hardening():
 run_test("12e. Touch-Screen Hardening", test_touch_hardening)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 12f: A palm on a smart board can't lock up or scribble on the board
+# ─────────────────────────────────────────────────────────────
+def test_smart_board_palm():
+    r = js("""
+      const cv = document.getElementById('ink'), R = cv.getBoundingClientRect(), out = {};
+      const ev = (t, id, x, w, primary) => cv.dispatchEvent(new PointerEvent(t, {pointerType: 'touch', pointerId: id,
+        bubbles: true, clientX: R.left + x, clientY: R.top + 250, width: w || 1, height: w || 1, isPrimary: !!primary}));
+      const n0 = Ink.strokes.length;
+      // a contact whose lift never arrives (the screen dropped it)
+      ev('pointerdown', 41, 100); ev('pointermove', 41, 140);
+      const pages = BOARD.pages.length; Board.add();
+      out.addWithGhost = BOARD.pages.length === pages + 1 && Ink.live.size === 0;
+      Board.prev();
+      out.ghostKept = Ink.strokes.length === n0 + 1;
+      Ink.undo(); out.ghostUndoable = Ink.strokes.length === n0;
+      // another ghost, then the next first finger down clears it
+      ev('pointerdown', 42, 100); ev('pointerdown', 43, 300, 1, true);
+      out.primaryClears = Ink.live.size === 1 && Ink.live.has(43);
+      ev('pointerup', 43, 300); Ink.undo(); Ink.undo();
+      // a palm-sized contact draws nothing
+      const n1 = Ink.strokes.length;
+      ev('pointerdown', 44, 500, 140); ev('pointermove', 44, 560, 140); ev('pointerup', 44, 560, 140);
+      out.palmIgnored = Ink.strokes.length === n1;
+      // a finger that spreads into a palm takes its ink back
+      ev('pointerdown', 45, 700, 10); ev('pointermove', 45, 740, 10); ev('pointermove', 45, 760, 160); ev('pointerup', 45, 760, 160);
+      out.spreadRemoved = Ink.strokes.length === n1 && Ink.live.size === 0;
+      // a flurry of short contacts doesn't redraw the whole board for each one
+      const redraw = Ink.redraw; let redraws = 0; Ink.redraw = function () { redraws++; return redraw.call(this); };
+      for (let k = 0; k < 50; k++) { ev('pointerdown', 100 + k, 900 + k); ev('pointerup', 100 + k, 902 + k); }
+      Ink.redraw = redraw; out.redraws = redraws;
+      for (let k = 0; k < 50; k++) Ink.undo();
+      out.cleanAfter = Ink.strokes.length === n1;
+      return out;""")
+    assert r['addWithGhost'], f"A stuck contact blocked + Page: {r}"
+    assert r['ghostKept'] and r['ghostUndoable'], f"The stuck contact's stroke was lost or not undoable: {r}"
+    assert r['primaryClears'], f"The next first finger did not clear a stuck contact: {r}"
+    assert r['palmIgnored'], f"A palm-sized contact drew on the board: {r}"
+    assert r['spreadRemoved'], f"A finger that spread into a palm left its ink: {r}"
+    assert r['redraws'] == 0, f"Each finished stroke redrew the whole board ({r['redraws']} redraws for 50 taps)"
+    assert r['cleanAfter'], f"Test cleanup failed: {r}"
+
+run_test("12f. Smart-Board Palm", test_smart_board_palm)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 13: Offline service worker
 # ─────────────────────────────────────────────────────────────
 def test_service_worker():

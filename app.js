@@ -17,6 +17,8 @@ const Store = {
 const SIZES = {pen: [3, 6, 12], duster: [20, 40, 80]};
 /* Very large screens (4K smart boards) get thicker ink and a bigger toolbar (see CSS). */
 const BIG = matchMedia('(min-width: 2200px)').matches ? 1.6 : 1;
+/* A touch wider than this (CSS px, ~3 cm) is a palm or the side of a hand, not a finger. */
+const PALM = 100;
 /* Straight lines snap level or upright when within ~6 degrees: tidy axes. */
 const snap = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1];
   return Math.abs(dy) < Math.abs(dx) * 0.1 ? [b[0], a[1]] : Math.abs(dx) < Math.abs(dy) * 0.1 ? [a[0], b[1]] : b; };
@@ -53,17 +55,26 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
       this.redraw();
     }).observe(this.cv);
     const pos = e => { const r = this.cv.getBoundingClientRect(); return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]; };
+    /* A palm reaches the board as a wide contact (where the screen reports contact size). */
+    const palm = e => e.pointerType === 'touch' && Math.max(e.width || 0, e.height || 0) > PALM;
+    /* The first finger down means no other finger is down: any stroke still open for that kind
+       of pointer is a ghost whose "lift" the screen never sent (smart boards drop these). */
+    document.addEventListener('pointerdown', e => { if (e.isPrimary) this.finish(e.pointerType); }, true);
     this.cv.addEventListener('pointerdown', e => {
       if (e.pointerType === 'pen') this.penSeen = true;
-      if (this.mode === 'off' || e.button > 0 || (e.pointerType === 'touch' && this.penSeen)) return;   // pen off; palm rejection
+      if (this.mode === 'off' || e.button > 0 || (e.pointerType === 'touch' && this.penSeen) || palm(e)) return;   // pen off; palm rejection
+      this.finish(null, e.pointerId);                               // a reused id: close its old stroke first
       const s = {c: this.mode === 'duster' ? -1 : this.ci, s: this.si, p: [pos(e)]};
-      this.live.set(e.pointerId, {s, line: this.mode === 'line'});
+      this.live.set(e.pointerId, {s, line: this.mode === 'line', type: e.pointerType});
       this.strokes.push(s);
       this.paint(this.g, [s]);
       try { this.cv.setPointerCapture(e.pointerId); } catch {}
     });
     this.cv.addEventListener('pointermove', e => {
       const l = this.live.get(e.pointerId); if (!l) return;
+      if (palm(e)) {                                                // a finger that spread into a palm: take its ink back
+        this.live.delete(e.pointerId); this.strokes.splice(this.strokes.lastIndexOf(l.s), 1); return this.redraw();
+      }
       if (l.line || e.shiftKey) {                                   // straight line: start point to here
         l.s.p = [l.s.p[0], snap(l.s.p[0], pos(e))]; this.redraw();
       } else {
@@ -71,12 +82,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
         this.paint(this.g, [l.s]);
       }
     });
-    const end = e => {
-      const l = this.live.get(e.pointerId); if (!l) return;
-      this.live.delete(e.pointerId);
-      this.record({add: l.s});
-      this.changed();
-    };
+    const end = e => this.finish(null, e.pointerId);
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) this.cv.addEventListener(t, end);
     /* iPhone/iPad: claim every touch on the board, so long rubs with the duster never turn into
        text selection, the magnifier or a page gesture that steals the following touches. */
@@ -102,6 +108,15 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
     this.g.setTransform(d, 0, 0, d, 0, 0);
     this.g.clearRect(0, 0, this.cv.width, this.cv.height);
     this.paint(this.g, this.strokes);
+  },
+  /* Close open strokes: one pointer's (id), one kind's (type), or all of them (no arguments).
+     The ink is already on screen, so no redraw; saving waits for a pause, so a flurry of
+     contacts (a palm, several people) costs almost nothing. */
+  finish(type, id) {
+    for (const [k, l] of this.live) {
+      if (id !== undefined ? k !== id : type && l.type !== type) continue;
+      this.live.delete(k); this.record({add: l.s}); Board.saveSoon();
+    }
   },
   changed() { this.redraw(); Board.save(); },
   _h() { if (!HISTORY.has(this.strokes)) HISTORY.set(this.strokes, {back: [], fwd: []}); return HISTORY.get(this.strokes); },
@@ -135,24 +150,27 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
 
 /* ── Pages ─────────────────────────────────────────────────── */
 const Board = {
-  save() { $('full').classList.toggle('hidden', Store.set('board.pages', BOARD)); },
+  save() { clearTimeout(this.t); this.t = null; $('full').classList.toggle('hidden', Store.set('board.pages', BOARD)); },
+  saveSoon() { clearTimeout(this.t); this.t = setTimeout(() => this.save(), 300); },
   show() { $('page-no').textContent = `${BOARD.i + 1} / ${BOARD.pages.length}`; Ink.redraw(); },
+  /* Changing page closes any stroke still open: one stuck contact must never lock the board. */
   go(i) {
-    if (Ink.live.size || !(i >= 0 && i < BOARD.pages.length)) return;
-    BOARD.i = i; this.save(); this.show();
+    if (!(i >= 0 && i < BOARD.pages.length)) return;
+    Ink.finish(); BOARD.i = i; this.save(); this.show();
   },
   prev() { this.go(BOARD.i - 1); },
   /* Moving on from the last page gives a fresh one, but never piles up empty pages. */
   next() { BOARD.i === BOARD.pages.length - 1 && Ink.strokes.length ? this.add() : this.go(BOARD.i + 1); },
-  add() { if (Ink.live.size) return; BOARD.pages.splice(BOARD.i + 1, 0, []); this.go(BOARD.i + 1); },
+  add() { Ink.finish(); BOARD.pages.splice(BOARD.i + 1, 0, []); this.go(BOARD.i + 1); },
   /* Start fresh. If the old board has any drawing, it is saved as a picture first. */
   async fresh() {
-    if (Ink.live.size) return;
+    Ink.finish();
     const inked = BOARD.pages.some(p => p.length);
     if (inked && (!confirm('Start a new board? This one is saved as a picture first.') || !await this.download())) return;
     BOARD = {pages: [[]], i: 0}; this.save(); this.show();
   },
   remove() {
+    Ink.finish();
     if (BOARD.pages.length === 1) return Ink.clear();                       // undoable
     if (Ink.strokes.length && !confirm('Delete this page and its drawing?')) return;
     BOARD.pages.splice(BOARD.i, 1);
@@ -231,6 +249,8 @@ const Clock = {t0: 0, acc: 0, h: null,
   }
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden && Clock.h) Wake.on(); });
+const flush = () => { if (Board.t) Board.save(); };                     // a save still waiting is never lost
+addEventListener('pagehide', flush); document.addEventListener('visibilitychange', flush);
 
 /* ── Install ───────────────────────────────────────────────── */
 /* Chrome/Edge/Brave/Android hand us an install prompt; iPhone/iPad never do, so there the
