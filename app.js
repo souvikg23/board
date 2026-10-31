@@ -42,29 +42,65 @@ function parse(txt) {
   return L;
 }
 
-const STARTER = `time: 50
+/* The first lecture everyone sees is a hands-on tour: each slide makes you use one feature. */
+const STARTER = `time: 30
 
 # Welcome to Board
-> Press Space, or Next line, to reveal
-? What happens when you press Next line?
-Each line appears one at a time
+> Press Space, the → key, or Next line to reveal each line
+Board shows your lecture one line at a time
+So the class follows you instead of reading ahead
 The newest line is highlighted || older lines fade back
-! Boxed lines hold the key result
-~ Notes appear in small blue text.
+! That's the main idea. Press Space to go on.
 
-# Pen and clock
-> Draw over any slide
-Turn the pen on with D, or the Pen button
-Ink stays on its own slide || Clear ink wipes it
-The clock turns red when your lecture time is up
+# Write in plain text
+> Press E (or Edit) to see how this slide is written
+Every line you type becomes one step
+? What does a line starting with ? turn into?
+! A line starting with ! goes in a box
+~ A line starting with ~ is a small note
+Two bars add a side remark || like this
+~ In the editor, press Esc or Done to come back
 
-# Your turn
-> Press Edit to see how this was written
-Slides, questions, notes and key lines are plain text
-Maths works too: x^{2} + y^{2}, a_{n}, {{1|2}}
-[[1, 0; 0, 1]] || a matrix
+# Maths without LaTeX
+> Superscripts, subscripts, fractions and matrices
+E = mc^{2}   and   a_{n+1} = a_{n} + d
+Probability = {{favourable|total}}
+The identity matrix [[1, 0; 0, 1]] || rows split by ;
 ~~Wrong step~~ crossed out, then corrected
-! Replace this text with your own lecture`;
+
+# Draw on any slide
+> Press D (or the Pen button) and draw with a mouse, stylus or finger
+Pick a colour from the dots in the sidebar
+Press X for the duster to rub out part of a drawing
+Ctrl+Z undoes a stroke · C clears this slide
+Ink stays on its own slide || it is still there when you come back
+
+# Keep time
+> Press T (or the Start clock button) when the lecture starts
+The clock turns red when the lecture time is up
+Set the length with time: 50 on the first line of a lecture
+~ This tour starts with time: 30
+
+# Your lectures stay on your device
+> Press L (or Library) to manage lectures
+Keep as many lectures as you like · duplicate one to reuse it
+Save file and Open file share a lecture with a colleague
+Backup all saves every lecture in one file
+Install Board and it works with no internet || nothing leaves your device
+! Ready? Press L, then New lecture`;
+
+/* What "New lecture" starts from: a fill-in example of every line type. */
+const TEMPLATE = `time: 50
+
+# Your title
+> Optional subtitle
+First point (Space reveals it in class)
+? A question for the class
+! The key result, in a box
+~ A small note
+
+# Next slide
+Keep going…`;
 
 /* ── Storage (this device only) ────────────────────────────── */
 const Store = {
@@ -83,13 +119,14 @@ const clean = l => l && typeof l.content === 'string' ? {
 function loadLibrary() {
   const s = Store.get('board.library') || {};
   const lectures = (Array.isArray(s.lectures) ? s.lectures : []).map(clean).filter(Boolean);
-  if (!lectures.length) lectures.push({id: uid(), name: 'Welcome', content: STARTER, modified: Date.now()});
+  if (!lectures.length) lectures.push({id: uid(), name: 'Board tour', content: STARTER, modified: Date.now()});
   return {lectures, activeId: lectures.some(l => l.id === s.activeId) ? s.activeId : lectures[0].id};
 }
 const FSTEPS = [0.75, 0.875, 1, 1.25, 1.5];   // text size steps; default is index 2 (100%)
 function loadPrefs() {
   const p = Store.get('board.prefs') || {};
-  return {theme: p.theme === 'light' ? 'light' : 'dark', fontLevel: FSTEPS[p.fontLevel] && Number.isInteger(p.fontLevel) ? p.fontLevel : 2};
+  return {theme: p.theme === 'light' ? 'light' : 'dark', fontLevel: FSTEPS[p.fontLevel] && Number.isInteger(p.fontLevel) ? p.fontLevel : 2,
+    welcomed: p.welcomed === true};
 }
 let LIBRARY = loadLibrary(), PREFS = loadPrefs(), LEC;
 const find = id => LIBRARY.lectures.find(l => l.id === id);
@@ -184,7 +221,7 @@ const Lib = {
     show(active().content); this._render();
   },
   add(lec) { LIBRARY.lectures.push(lec); this.select(lec.id); },
-  create() { this.add({id: uid(), name: 'Untitled', content: '# New Lecture\n> Start writing here\n', modified: Date.now()}); },
+  create() { this.add({id: uid(), name: nameOf(TEMPLATE), content: TEMPLATE, modified: Date.now()}); },
   duplicate() { const c = active(); this.add({...c, id: uid(), name: c.name + ' (copy)', modified: Date.now()}); },
   rename(id) {
     const l = find(id), name = l && prompt('Lecture name', l.name)?.trim();
@@ -349,10 +386,23 @@ const App = {prompt: null,
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); App.prompt = e; App.show(true); });
 addEventListener('appinstalled', () => { App.installed = true; App.show(false); });
 
+/* ── Welcome card and tour ─────────────────────────────────── */
+const Help = {
+  open() { $('help').showModal(); },
+  close() { $('help').close(); },
+  tour() {
+    this.close();
+    const t = LIBRARY.lectures.find(l => l.content === STARTER);
+    t ? Lib.select(t.id) : Lib.add({id: uid(), name: 'Board tour', content: STARTER, modified: Date.now()});
+  },
+  write() { this.close(); Lib.create(); Ed.open(); }
+};
+$('help').addEventListener('close', () => { PREFS.welcomed = true; savePrefs(); });
+
 /* ── Buttons and keys ──────────────────────────────────────── */
 /* Buttons carry data-do="Object.method" (and optional data-arg); no inline handlers,
    so the page can forbid inline script entirely. */
-const ACTIONS = {B, Ed, Lib, Ink, Clock, Theme, Font, App};
+const ACTIONS = {B, Ed, Lib, Ink, Clock, Theme, Font, App, Help};
 const run = (act, arg, e) => { const [o, m] = act.split('.'); ACTIONS[o]?.[m]?.(arg, e); };
 document.addEventListener('click', e => { const el = e.target.closest('[data-do]'); if (el) run(el.dataset.do, el.dataset.arg, e); });
 $('file').addEventListener('change', e => Ed.load(e.target));
@@ -361,8 +411,9 @@ $('src').addEventListener('input', () => Ed.stat());
 
 const KEYS = {' ': 'B.next', arrowright: 'B.next', pagedown: 'B.next', arrowleft: 'B.prev', pageup: 'B.prev',
   e: 'Ed.open', l: 'Lib.open', d: 'Ink.toggle', x: 'Ink.toggleDuster', c: 'Ink.clear', t: 'Clock.toggle',
-  w: 'Theme.toggle', '=': 'Font.up', '+': 'Font.up', '-': 'Font.down', _: 'Font.down', f: 'B.fullscreen'};
+  w: 'Theme.toggle', '=': 'Font.up', '+': 'Font.up', '-': 'Font.down', _: 'Font.down', f: 'B.fullscreen', '?': 'Help.open'};
 document.addEventListener('keydown', e => {
+  if ($('help').open) return;                    // the dialog handles its own keys (Esc closes)
   const overlay = ['editor', 'library'].find(id => !$(id).classList.contains('hidden'));
   if (overlay) { if (e.key === 'Escape') (overlay === 'editor' ? Ed : Lib).close(); return; }
   const k = e.key.toLowerCase();
@@ -378,6 +429,7 @@ Theme.apply();
 Font._apply();
 show(active().content);
 App.show(App.ios);
+if (!PREFS.welcomed) Help.open();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
 /* Ask the browser never to clear Board's storage when the device runs low on space,
    so lectures saved on this device stay there until you delete them. */

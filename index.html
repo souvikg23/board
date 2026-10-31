@@ -110,6 +110,21 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
 #editor details{font:14px/1.7 system-ui,sans-serif;color:var(--dim)}
 #editor summary{cursor:pointer;color:var(--chalk)}
 #editor code{font:13px ui-monospace,monospace;color:var(--new)}
+.guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 18px;margin:6px 0 4px}
+
+/* ── Welcome card ──────────────────────────────────────────── */
+#help{max-width:600px;width:calc(100% - 32px);padding:26px 28px;border:1px solid var(--border);border-radius:10px;
+  background:var(--slate2);color:var(--chalk);font:15px/1.55 system-ui,sans-serif}
+#help::backdrop{background:rgba(0,0,0,.6)}
+#help h2{font:400 26px "Cambria","Georgia",serif;margin:0 0 4px}
+#help .lead{color:var(--dim);margin:0 0 18px}
+#help ol{list-style:none;padding:0;margin:0 0 16px;display:grid;gap:12px}
+#help li b{color:var(--new)}
+#help .small{font-size:13px;color:var(--dim);margin:0 0 18px}
+#help code{font:14px ui-monospace,monospace;color:var(--new)}
+button.primary,button.primary:hover,button.primary:focus-visible{background:var(--new);color:var(--slate);border-color:var(--new)}
+button.primary:hover{opacity:.88}
+button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
 
 /* ── Library Overlay ───────────────────────────────────────── */
 #library{position:fixed;inset:0;z-index:10;background:var(--slate);display:flex;flex-direction:column;
@@ -180,6 +195,7 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
     <div class="btn-row">
       <button data-do="Lib.open">Library</button>
       <button data-do="Ed.open">Edit</button>
+      <button data-do="Help.open" title="What can Board do? (?)">?</button>
       <button id="install" class="hidden" data-do="App.install" title="Install Board on this device">⬇ Install app</button>
     </div>
     <div>
@@ -202,7 +218,7 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
       <kbd>1</kbd>–<kbd>9</kbd> jump to slide<br>
       <kbd>D</kbd> pen · <kbd>X</kbd> duster · <kbd>Ctrl+Z</kbd> undo ink · <kbd>C</kbd> clear<br>
       <kbd>E</kbd> edit · <kbd>L</kbd> library · <kbd>W</kbd> theme<br>
-      <kbd>+</kbd>/<kbd>−</kbd> font · <kbd>T</kbd> clock · <kbd>F</kbd> fullscreen
+      <kbd>+</kbd>/<kbd>−</kbd> font · <kbd>T</kbd> clock · <kbd>F</kbd> fullscreen · <kbd>?</kbd> help
     </div>
   </aside>
 </div>
@@ -215,14 +231,21 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
     <input type="file" id="file" accept=".txt,.md,text/plain" hidden>
     <span id="stat"></span>
   </div>
-  <details><summary>How to write a lecture</summary>
-    <code># Title</code> starts a slide · <code>&gt; text</code> subtitle ·
-    <code>? text</code> question for the class · <code>! text</code> boxed key line ·
-    <code>~ text</code> small note · any other line is a step, revealed one at a time<br>
-    <code>step || remark</code> adds a grey side remark ·
-    <code>x^{2}</code> superscript · <code>a_{n}</code> subscript · <code>&#123;&#123;1|2&#125;&#125;</code> fraction ·
-    <code>[[1, 0; 0, 1]]</code> matrix (rows split by <code>;</code>) · <code>~~text~~</code> crossed out<br>
-    <code>time: 50</code> on the first line turns the clock red after 50 minutes (default 30)
+  <details open><summary>Format guide: start a line with…</summary>
+    <div class="guide">
+      <div><code># Title</code> new slide</div>
+      <div><code>&gt; text</code> subtitle under the title</div>
+      <div><code>any line</code> a step, revealed one at a time</div>
+      <div><code>? text</code> question for the class</div>
+      <div><code>! text</code> key line in a box</div>
+      <div><code>~ text</code> small note</div>
+      <div><code>step || remark</code> grey side remark</div>
+      <div><code>x^{2}</code> <code>a_{n}</code> superscript, subscript</div>
+      <div><code>&#123;&#123;1|2&#125;&#125;</code> fraction</div>
+      <div><code>[[1, 0; 0, 1]]</code> matrix, rows split by <code>;</code></div>
+      <div><code>~~text~~</code> crossed out</div>
+      <div><code>time: 50</code> first line: lecture length (minutes)</div>
+    </div>
   </details>
   <textarea id="src" spellcheck="false" aria-label="Lecture text"></textarea>
 </div>
@@ -238,6 +261,24 @@ kbd{font:12px ui-monospace,monospace;border:1px solid var(--btn-border);border-r
   </div>
   <div id="lib-list"></div>
 </div>
+
+<dialog id="help" aria-labelledby="help-title">
+  <h2 id="help-title">Board</h2>
+  <p class="lead">Your lecture on screen, one line at a time, like writing on a real board.</p>
+  <ol>
+    <li><b>✍️ Write</b> in plain text. Every line you type becomes one step.
+      <code>#</code> starts a slide, and maths works without LaTeX.</li>
+    <li><b>▶️ Present</b> with Space or →. Each press reveals the next line,
+      so the class follows you instead of reading ahead.</li>
+    <li><b>🖊️ Draw</b> over any slide with the pen, and rub out with the duster. A clock tells you when time is up.</li>
+  </ol>
+  <p class="small">Works without internet once opened · lectures stay on this device · install it as an app.</p>
+  <div class="btn-row">
+    <button class="primary" data-do="Help.tour">Take the 1-minute tour</button>
+    <button data-do="Help.write">Write my own lecture</button>
+    <button data-do="Help.close">Close</button>
+  </div>
+</dialog>
 
 <script src="app.js"></script>
 </body>

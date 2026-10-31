@@ -18,8 +18,13 @@ Press **⬇ Install app** in Board's sidebar (Chrome, Edge, Brave, Android; on i
 Open it once while online. After that it runs with no internet, and everything (lectures, settings)
 stays on that device. Board asks the browser to keep that storage permanently, so it isn't cleared when space runs low.
 
+## Getting started
+First visit shows a short welcome card. **Take the 1-minute tour** is a lecture that teaches Board
+by making you use each feature; press **?** any time to bring the card back.
+
 ## Writing lectures
-Press **Edit lecture** (or E). Lectures are plain text; the format guide is inside the editor.
+Press **Edit** (or E). Lectures are plain text; the format guide sits at the top of the editor,
+and **New lecture** starts from a fill-in template.
 Your lecture is kept on that device. Use **Save file** / **Open file** to move lectures between devices or share them.
 
 ## Updating the app itself

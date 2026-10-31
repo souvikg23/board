@@ -44,6 +44,17 @@ def run_test(name, fn):
         test_results.append({'name': name, 'status': 'FAIL', 'error': str(e)})
 
 # ─────────────────────────────────────────────────────────────
+# TEST 0: Welcome card on first visit (must run first: it is modal)
+# ─────────────────────────────────────────────────────────────
+def test_welcome_card():
+    assert driver.execute_script("return document.getElementById('help').open;"), "Welcome card not shown on first visit"
+    driver.find_element(By.CSS_SELECTOR, "#help [data-do='Help.close']").click()
+    assert not driver.execute_script("return document.getElementById('help').open;"), "Welcome card did not close"
+    assert driver.execute_script("return JSON.parse(localStorage.getItem('board.prefs')).welcomed === true;"), "Welcome not remembered"
+
+run_test("0. Welcome Card (first visit)", test_welcome_card)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 1: Initial Render & DOM Structure
 # ─────────────────────────────────────────────────────────────
 def test_initial_render():
@@ -82,7 +93,7 @@ def test_slide_jump():
     # Jump to slide 2 (index 1)
     driver.execute_script("B.go(1);")
     title = driver.find_element(By.ID, "title").text
-    assert "Pen and clock" in title, f"Expected slide 2 title 'Pen and clock', got '{title}'"
+    assert "Write in plain text" in title, f"Expected slide 2 title 'Write in plain text', got '{title}'"
     
     # Jump back to slide 1 (index 0)
     driver.execute_script("B.go(0);")
@@ -383,6 +394,30 @@ def test_install_button():
     assert not btn.is_displayed(), "Install button should hide once installed"
 
 run_test("17. Install Button", test_install_button)
+
+# ─────────────────────────────────────────────────────────────
+# TEST 18: Help, tour and "write my own" from the welcome card
+# ─────────────────────────────────────────────────────────────
+def test_help_tour_write():
+    body = driver.find_element(By.TAG_NAME, "body")
+    body.send_keys("?")
+    assert driver.execute_script("return document.getElementById('help').open;"), "'?' did not open the welcome card"
+    before = driver.execute_script("return LIBRARY.lectures.length;")
+    driver.find_element(By.CSS_SELECTOR, "#help [data-do='Help.tour']").click()
+    assert driver.find_element(By.ID, "title").text == "Welcome to Board", "Tour did not start on its first slide"
+    driver.execute_script("Help.open();")
+    driver.find_element(By.CSS_SELECTOR, "#help [data-do='Help.tour']").click()
+    tours = driver.execute_script("return LIBRARY.lectures.filter(l => l.name === 'Board tour').length;")
+    assert tours <= 1, f"Tour was added again instead of reused ({tours} copies)"
+    driver.execute_script("Help.open();")
+    driver.find_element(By.CSS_SELECTOR, "#help [data-do='Help.write']").click()
+    assert driver.execute_script("return !document.getElementById('editor').classList.contains('hidden');"), "Editor did not open"
+    src = driver.execute_script("return document.getElementById('src').value;")
+    assert src.startswith("time: 50") and "? A question" in src, "New lecture did not start from the template"
+    assert driver.execute_script("return LIBRARY.lectures.length;") >= before + 1, "New lecture not added"
+    driver.execute_script("Ed.close();")
+
+run_test("18. Help, Tour and Write-My-Own", test_help_tour_write)
 
 # Restore default lecture in library
 driver.execute_script("""
