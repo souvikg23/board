@@ -462,6 +462,55 @@ def test_smart_board_palm():
 run_test("12f. Smart-Board Palm", test_smart_board_palm)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 12g: Back after a long break, the board asks before anyone carries on
+# ─────────────────────────────────────────────────────────────
+def test_back_after_break():
+    dlg = lambda: js("return document.getElementById('resume').open;")
+    touch = """const cv = document.getElementById('ink'), r = cv.getBoundingClientRect();
+      for (const t of ['pointerdown', 'pointerup']) cv.dispatchEvent(new PointerEvent(t, {pointerType: 'touch',
+        pointerId: 51, bubbles: true, isPrimary: true, clientX: r.left + 400, clientY: r.top + 400}));"""
+    stroke([(100, 400), (160, 420)])
+    n = js("return Ink.strokes.length;")
+    js("BOARD.t = Date.now() - 10 * 60000;" + touch)          # a short pause: no question
+    assert not dlg() and js("return Ink.strokes.length;") == n + 1, "Asked after a short pause, or the touch didn't draw"
+    js("Ink.undo(); BOARD.t = Date.now() - 2 * 3600000;" + touch)   # two hours later, the next touch
+    assert dlg(), "No question after a long break"
+    assert js("return Ink.strokes.length;") == n, "The touch that raised the question also drew"
+    assert "2 hours" in driver.find_element(By.ID, "resume-age").text, "Wrong idle time shown"
+    press("c")
+    assert js("return Ink.strokes.length;") == n, "Keyboard shortcuts acted behind the question"
+    driver.find_element(By.CSS_SELECTOR, "#resume [data-do='Resume.keep']").click()
+    time.sleep(0.2)
+    assert not dlg() and js("return Ink.strokes.length;") == n, "Continue did not keep the board"
+    js(touch)
+    assert not dlg() and js("return Ink.strokes.length;") == n + 1, "Asked twice, or drawing didn't resume"
+    js("Ink.undo(); localStorage.setItem('board.pages', JSON.stringify({...BOARD, t: Date.now() - 3 * 86400000}));")
+    driver.refresh(); time.sleep(0.8)                         # opened days later
+    assert not js("return document.getElementById('help').open;"), "The welcome card came back after settings were changed"
+    assert dlg() and "3 days" in driver.find_element(By.ID, "resume-age").text, "No question when opened days later"
+    before = len(os.listdir(DOWNLOADS))
+    driver.find_element(By.CSS_SELECTOR, "#resume [data-do='Resume.fresh']").click()
+    for _ in range(20):
+        if len(os.listdir(DOWNLOADS)) > before and js("return Ink.strokes.length;") == 0:
+            break
+        time.sleep(0.25)
+    assert len(os.listdir(DOWNLOADS)) > before, "Start fresh did not keep a picture of the old board"
+    assert js("return [BOARD.pages.length, Ink.strokes.length];") == [1, 0] and not dlg(), "Start fresh did not clear"
+    js("BOARD.t = Date.now() - 2 * 3600000; document.dispatchEvent(new Event('visibilitychange'));")
+    assert not dlg(), "An empty board should never ask"
+    stroke([(100, 400), (160, 420)])
+    time.sleep(0.5)                                           # let the stroke's save land first
+    js("BOARD.t = Date.now() - 2 * 3600000; document.dispatchEvent(new Event('visibilitychange'));")
+    assert dlg(), "No question when the screen wakes after a long break"
+    press("")                                           # Escape counts as carrying on
+    time.sleep(0.2)
+    assert not dlg(), "Escape did not close the question"
+    assert js("return Date.now() - BOARD.t;") < 5000, "Escape left the board marked idle (it would ask again)"
+    js("Ink.undo();")
+
+run_test("12g. Back After a Break", test_back_after_break)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 13: Offline service worker
 # ─────────────────────────────────────────────────────────────
 def test_service_worker():

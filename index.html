@@ -67,11 +67,11 @@ button.on{background:var(--new);color:var(--slate);border-color:var(--new)}
 #more.hidden{display:none}
 
 /* ── Welcome / help card ── */
-#help{max-width:620px;width:calc(100% - 32px);max-height:calc(100% - 32px);padding:26px 28px;
+#help,#resume{max-width:620px;width:calc(100% - 32px);max-height:calc(100% - 32px);padding:26px 28px;
   border:1px solid var(--border);border-radius:10px;background:var(--slate2);color:var(--chalk);font:15px/1.55 system-ui,sans-serif}
-#help::backdrop{background:rgba(0,0,0,.6)}
-#help h2{font:400 26px "Cambria","Georgia",serif;margin:0 0 4px}
-#help .lead{color:var(--dim);margin:0 0 18px}
+#help::backdrop,#resume::backdrop{background:rgba(0,0,0,.6)}
+#help h2,#resume h2{font:400 26px "Cambria","Georgia",serif;margin:0 0 4px}
+#help .lead,#resume .lead{color:var(--dim);margin:0 0 18px}
 #help ol{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:12px}
 #help li b{color:var(--new)}
 #help .small{font-size:13px;color:var(--dim);margin:0 0 14px}
@@ -160,7 +160,8 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
     <li><b>📄 Pages.</b> + Page gives you a fresh board. Flip with ◀ ▶, the arrow keys or a presentation clicker.
       Everything stays on this device, even if you close the tab.</li>
     <li><b>💾 Save &amp; share.</b> Save turns every page into one picture, ready for WhatsApp or Teams.
-      New board starts fresh and saves the old one as a picture first.</li>
+      New board starts fresh and saves the old one as a picture first. After a long break, Board asks whether
+      to carry on or start fresh, so on a shared classroom screen the next teacher gets a clean board.</li>
   </ol>
   <p class="small">Grid or ruled lines for maths · a lecture clock · chalkboard or whiteboard · install it as an app.</p>
   <details><summary>Keyboard shortcuts</summary>
@@ -183,6 +184,16 @@ button.primary:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
   </div>
 </dialog>
 
-<script src="app.js?v=f5baba9b62"></script>
+<dialog id="resume" aria-labelledby="resume-title">
+  <h2 id="resume-title">Welcome back</h2>
+  <p class="lead">This board hasn't been used for <span id="resume-age">a while</span>. Is it yours?
+    Start fresh keeps a picture of it first.</p>
+  <div class="grp">
+    <button class="primary" data-do="Resume.keep" autofocus>Continue this board</button>
+    <button data-do="Resume.fresh" title="The old board is saved as a picture first">Start fresh</button>
+  </div>
+</dialog>
+
+<script src="app.js?v=3f59705b54"></script>
 </body>
 </html>

@@ -19,6 +19,9 @@ const SIZES = {pen: [3, 6, 12], duster: [20, 40, 80]};
 const BIG = matchMedia('(min-width: 2200px)').matches ? 1.6 : 1;
 /* A touch wider than this (CSS px, ~3 cm) is a palm or the side of a hand, not a finger. */
 const PALM = 100;
+/* After this long with no drawing, the board asks whether to carry on: on a shared classroom
+   PC, the next teacher shouldn't walk in to the last class's board. */
+const AWAY = 40 * 60 * 1000;
 /* Straight lines snap level or upright when within ~6 degrees: tidy axes. */
 const snap = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1];
   return Math.abs(dy) < Math.abs(dx) * 0.1 ? [b[0], a[1]] : Math.abs(dx) < Math.abs(dy) * 0.1 ? [a[0], b[1]] : b; };
@@ -30,12 +33,13 @@ function loadBoard() {
   const d = Store.get('board.pages');
   const pages = (Array.isArray(d?.pages) ? d.pages : []).map(pg => (Array.isArray(pg) ? pg : []).map(cleanStroke).filter(Boolean));
   if (!pages.length) pages.push([]);
-  return {pages, i: Number.isInteger(d?.i) && d.i >= 0 && d.i < pages.length ? d.i : 0};
+  return {pages, i: Number.isInteger(d?.i) && d.i >= 0 && d.i < pages.length ? d.i : 0,
+    t: Number.isFinite(d?.t) && d.t <= Date.now() ? d.t : Date.now()};    // last used (older saves: now)
 }
 function loadPrefs() {
   const p = Store.get('board.prefs') || {};
   return {theme: p.theme === 'light' ? 'light' : 'dark', bg: ['grid', 'lines'].includes(p.bg) ? p.bg : 'plain',
-    welcomed: p.welcomed === 2};          // 2 = has seen the drawing-board welcome
+    welcomed: p.welcomed === 2 ? 2 : 0};  // 2 = has seen the drawing-board welcome (kept as 2, so saving prefs keeps it)
 }
 let BOARD = loadBoard(), PREFS = loadPrefs();
 const savePrefs = () => Store.set('board.prefs', PREFS);
@@ -60,6 +64,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
     /* The first finger down means no other finger is down: any stroke still open for that kind
        of pointer is a ghost whose "lift" the screen never sent (smart boards drop these). */
     document.addEventListener('pointerdown', e => { if (e.isPrimary) this.finish(e.pointerType); }, true);
+    this.cv.addEventListener('pointerdown', e => { if (Resume.check()) e.stopImmediatePropagation(); });   // back after a break: ask first
     this.cv.addEventListener('pointerdown', e => {
       if (e.pointerType === 'pen') this.penSeen = true;
       if (this.mode === 'off' || e.button > 0 || (e.pointerType === 'touch' && this.penSeen) || palm(e)) return;   // pen off; palm rejection
@@ -150,7 +155,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
 
 /* ── Pages ─────────────────────────────────────────────────── */
 const Board = {
-  save() { clearTimeout(this.t); this.t = null; $('full').classList.toggle('hidden', Store.set('board.pages', BOARD)); },
+  save() { clearTimeout(this.t); this.t = null; BOARD.t = Date.now(); $('full').classList.toggle('hidden', Store.set('board.pages', BOARD)); },
   saveSoon() { clearTimeout(this.t); this.t = setTimeout(() => this.save(), 300); },
   show() { $('page-no').textContent = `${BOARD.i + 1} / ${BOARD.pages.length}`; Ink.redraw(); },
   /* Changing page closes any stroke still open: one stuck contact must never lock the board. */
@@ -163,11 +168,12 @@ const Board = {
   next() { BOARD.i === BOARD.pages.length - 1 && Ink.strokes.length ? this.add() : this.go(BOARD.i + 1); },
   add() { Ink.finish(); BOARD.pages.splice(BOARD.i + 1, 0, []); this.go(BOARD.i + 1); },
   /* Start fresh. If the old board has any drawing, it is saved as a picture first. */
-  async fresh() {
+  async fresh(asked) {
     Ink.finish();
     const inked = BOARD.pages.some(p => p.length);
-    if (inked && (!confirm('Start a new board? This one is saved as a picture first.') || !await this.download())) return;
+    if (inked && ((!asked && !confirm('Start a new board? This one is saved as a picture first.')) || !await this.download())) return;
     BOARD = {pages: [[]], i: 0}; this.save(); this.show();
+    return true;
   },
   remove() {
     Ink.finish();
@@ -275,6 +281,22 @@ const Help = {
 };
 $('help').addEventListener('close', () => { PREFS.welcomed = 2; savePrefs(); });
 
+/* ── Back after a break ─────────────────────────────────────── */
+const Resume = {
+  /* Ask only when there is something on the board and it has sat untouched for a while. */
+  check() {
+    if (document.querySelector('dialog[open]') || Date.now() - BOARD.t < AWAY || !BOARD.pages.some(p => p.length)) return false;
+    const m = Math.round((Date.now() - BOARD.t) / 60000);
+    $('resume-age').textContent = m < 120 ? `${m} minutes` : m < 2880 ? `${Math.round(m / 60)} hours` : `${Math.round(m / 1440)} days`;
+    $('resume').showModal();
+    return true;
+  },
+  keep() { $('resume').close(); },
+  fresh() { $('resume').close(); Board.fresh(true); }
+};
+$('resume').addEventListener('close', () => Board.save());      // any answer (or Esc) counts as being back: no second ask
+document.addEventListener('visibilitychange', () => { if (!document.hidden) Resume.check(); });   // screen woke up
+
 /* ── More menu: settings that don't need to sit on the toolbar ── */
 const Menu = {
   toggle() {
@@ -288,7 +310,7 @@ const Menu = {
 /* ── Buttons and keys ──────────────────────────────────────── */
 /* Buttons carry data-do="Object.method" (and optional data-arg); no inline handlers,
    so the page can forbid inline script entirely. */
-const ACTIONS = {Board, Ink, Theme, Bg, Clock, App, Help, Menu};
+const ACTIONS = {Board, Ink, Theme, Bg, Clock, App, Help, Menu, Resume};
 const run = (act, arg) => { const [o, m] = act.split('.'); ACTIONS[o]?.[m]?.(arg); };
 document.addEventListener('click', e => {
   if (!e.target.closest('#more, #more-btn')) Menu.close();                // a click anywhere else closes the menu
@@ -301,7 +323,7 @@ const KEYS = {arrowright: 'Board.next', pagedown: 'Board.next', arrowdown: 'Boar
   d: 'Ink.pen', l: 'Ink.line', x: 'Ink.duster', e: 'Ink.duster', c: 'Ink.clear', g: 'Bg.cycle', t: 'Clock.toggle',
   w: 'Theme.toggle', s: 'Board.download', f: 'Board.fullscreen', '?': 'Help.open'};
 document.addEventListener('keydown', e => {
-  if ($('help').open) return;                    // the dialog handles its own keys (Esc closes)
+  if (document.querySelector('dialog[open]')) return;     // a dialog handles its own keys (Esc closes)
   if (e.key === 'Escape') return Menu.close();
   const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
   if (mod && k === 'z') { e.preventDefault(); return e.shiftKey ? Ink.redo() : Ink.undo(); }
@@ -321,7 +343,7 @@ Ink.sync();
 Board.show();
 Clock.show();
 App.show(App.ios);
-if (!PREFS.welcomed) Help.open();
+if (!PREFS.welcomed) Help.open(); else Resume.check();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
 /* Ask the browser never to clear Board's storage when the device runs low on space. */
 navigator.storage?.persist?.()?.catch(() => {});
