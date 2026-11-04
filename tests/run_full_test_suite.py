@@ -542,6 +542,82 @@ def test_out_of_room_tip():
 run_test("12h. Out-of-Room Tip", test_out_of_room_tip)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 12i: A saved picture opens back into Board
+# ─────────────────────────────────────────────────────────────
+def snapshot():
+    return {f: os.path.getmtime(os.path.join(DOWNLOADS, f)) for f in os.listdir(DOWNLOADS)}
+
+def newest_download(before):
+    """The picture saved since `before` (a snapshot()): a new file, or one rewritten under the same name."""
+    for _ in range(40):
+        now = snapshot()
+        done = [f for f in now if f.endswith('.png') and now[f] != before.get(f)]
+        if done:
+            time.sleep(0.3)
+            return os.path.join(DOWNLOADS, done[0])
+        time.sleep(0.25)
+    raise AssertionError("No picture was saved")
+
+def png_chunks(path):
+    import struct, zlib
+    b = open(path, 'rb').read()
+    assert b[:8] == b'\x89PNG\r\n\x1a\n', "Saved file is not a PNG"
+    out, o = [], 8
+    while o < len(b):
+        n, t = struct.unpack('>I4s', b[o:o + 8])
+        assert zlib.crc32(b[o + 4:o + 8 + n]) == struct.unpack('>I', b[o + 8 + n:o + 12 + n])[0], f"Bad CRC in {t} chunk"
+        out.append(t.decode()); o += 12 + n
+    return out
+
+def open_file(path):
+    js("const i = document.getElementById('open-file'); i.hidden = false;")
+    driver.find_element(By.ID, "open-file").send_keys(path)
+    js("document.getElementById('open-file').hidden = true;")
+    time.sleep(0.5)
+
+def test_open_saved_board():
+    js("window.confirm = () => true; window.__alerts = []; window.alert = m => window.__alerts.push(m);")
+    js("BOARD = {pages: [[]], i: 0, t: Date.now()}; Board.show();")
+    stroke([(100, 100), (200, 140)]); js("Board.add();"); stroke([(300, 300), (360, 380), (420, 300)])
+    want = js("return BOARD.pages;")
+    before = snapshot(); press("s")
+    saved = newest_download(before)
+    chunks = png_chunks(saved)
+    assert chunks[0] == 'IHDR' and chunks[-1] == 'IEND' and 'tEXt' in chunks, f"Board data not stored in the picture: {chunks}"
+    assert js("""return new Promise(r => { const i = new Image(); i.onload = () => r(i.width > 0); i.onerror = () => r(false);
+                 i.src = URL.createObjectURL(new Blob([Uint8Array.from(atob(arguments[0]), c => c.charCodeAt(0))])); });""",
+              __import__('base64').b64encode(open(saved, 'rb').read()).decode()), "The saved picture no longer opens as an image"
+    # opening over a board with ink: asks first; Cancel keeps it, the button saves it and then opens
+    open_file(saved)
+    assert js("return document.getElementById('opener').open;"), "Opening over a drawn board didn't ask first"
+    driver.find_element(By.CSS_SELECTOR, "#opener [data-do='Board.cancelOpen']").click()
+    assert js("return [BOARD.pages.length, BOARD.i, Board.pending];") == [2, 1, None], "Cancelling Open changed the board"
+    before = snapshot(); open_file(saved)
+    driver.find_element(By.CSS_SELECTOR, "#opener [data-do='Board.openPending']").click()
+    newest_download(before)                                          # the board on screen was kept as a picture
+    time.sleep(0.3)
+    assert js("return BOARD.pages;") == want, "Opened board differs from the one saved"
+    assert js("return [BOARD.i, document.getElementById('page-no').textContent];") == [0, "1 / 2"], "Opened board not shown from page 1"
+    assert js("return Ink.strokes.length;") == 1 and alpha(150, 120) > 0, "Opened board not drawn"
+    # a picture with no board in it (an icon), or one WhatsApp recompressed: a clear message, nothing changes
+    open_file(os.path.join(ROOT, "icons", "icon-192.png"))
+    assert js("return window.__alerts.length;") == 1 and js("return BOARD.pages;") == want, "A plain picture should explain, not open"
+    # drawn on a bigger screen: shrunk to fit; dropped onto the board instead of picked
+    r = driver.execute_async_script("""const done = arguments[arguments.length - 1];
+      const w = Ink.cv.clientWidth, h = Ink.cv.clientHeight;
+      Board.image().then(b => Png.embed(b, JSON.stringify({app: 'board', v: 1, w: w * 2, h: h * 2,
+          pages: [[{c: 2, s: 1, p: [[w * 2 - 2, h * 2 - 2], [w, h]]}]]})))
+        .then(b => { const dt = new DataTransfer(); dt.items.add(new File([b], 'big.png', {type: 'image/png'}));
+          BOARD = {pages: [[]], i: 0, t: Date.now()};             // empty board: opens straight away
+          document.getElementById('ink').dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true}));
+          setTimeout(() => done([Ink.strokes[0]?.p, w, h]), 500); });""")
+    (x0, y0), (x1, y1) = r[0]
+    assert x0 <= r[1] and y0 <= r[2] and abs(x1 - r[1] / 2) <= 1, f"Board from a bigger screen not shrunk to fit: {r}"
+    js("BOARD = {pages: [[]], i: 0, t: Date.now()}; Board.save(); Board.show();")
+
+run_test("12i. Saved Picture Opens in Board", test_open_saved_board)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 13: Offline service worker
 # ─────────────────────────────────────────────────────────────
 def test_service_worker():
@@ -588,6 +664,37 @@ def test_tampered_storage():
     assert js("return Ink.strokes.length;") == 2, "Board unusable after loading tampered data"
 
 run_test("14. Security: tampered saved data", test_tampered_storage)
+
+def test_tampered_picture():
+    r = driver.execute_async_script("""const done = arguments[arguments.length - 1];
+      window.confirm = () => true; window.__alerts = []; window.alert = m => window.__alerts.push(m);
+      const evil = '<img src=x onerror=window.__pwn9=1>';
+      const open = async text => { const b = await Png.embed(await Board.image(), text);
+        BOARD = {pages: [[]], i: 0, t: Date.now()};           // an empty board opens without asking
+        return Board.open(new File([b], 'x.png', {type: 'image/png'})); };
+      (async () => {
+        const out = [];
+        out.push(await open(JSON.stringify({app: 'board', w: evil, h: 'x', pages: [
+          [{c: 1, s: 1, p: [[5, 5], [9, 9]]}, {c: evil, s: 1, p: [[1, 1]]}, {c: 1, s: 1, p: [[evil, 1]]}, {c: 1, s: 1, p: 'x'}, null],
+          evil, [{c: 0, s: 0, p: [[1, 2]]}]]})));
+        out.push(BOARD.pages.map(p => p.length), document.getElementById('page-no').textContent);
+        out.push(await open('{"app": "board", "pages": [[{"c": 1, "s": 1, "p": [[1, 1]]}]], "__proto__": {"pwned": 1}}'), ({}).pwned === undefined);
+        out.push(await open('not json <script>window.__pwn10=1</script>'));
+        out.push(await open(JSON.stringify({app: 'other', pages: [[{c: 1, s: 1, p: [[1, 1]]}]]})));
+        BOARD = {pages: [[{c: 0, s: 0, p: [[1, 1]]}]], i: 0, t: Date.now()};
+        out.push(await Board.open(new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 255, 255, 255, 255, 1, 2])], 'cut.png')));
+        out.push(window.__alerts.length);
+        done(out);
+      })().catch(e => done('threw ' + e));""")
+    assert not pwned(), f"A booby-trapped picture ran code: {pwned()}"
+    assert r[0] is True and r[1] == [1, 0, 1] and r[2] == "1 / 3", f"Bad strokes in a picture should be dropped, good ones kept: {r}"
+    assert r[3] is True and r[4] is True, f"A picture could pollute the page's objects: {r}"
+    assert r[5:9] == [False, False, False, 3], f"Broken or foreign pictures should be refused with a message: {r}"
+    stroke([(100, 100), (150, 120)])
+    assert not js("return document.getElementById('opener').open;"), "A refused picture still asked to open"
+    assert js("return Ink.strokes.length;") == 2, "Board unusable after opening a booby-trapped picture"
+
+run_test("14b. Security: booby-trapped saved picture", test_tampered_picture)
 
 def test_csp_blocks_inline_script():
     csp = js("return document.querySelector('meta[http-equiv=Content-Security-Policy]')?.content || '';")

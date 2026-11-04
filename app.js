@@ -29,6 +29,42 @@ const isPt = q => Array.isArray(q) && q.length === 2 && Number.isFinite(q[0]) &&
 const cleanStroke = s => s && Number.isInteger(s.c) && s.c >= -1 && s.c <= 3 && Number.isInteger(s.s) && s.s >= 0 && s.s <= 2 &&
   Array.isArray(s.p) && s.p.length && s.p.every(isPt) ? {c: s.c, s: s.s, p: s.p} : null;
 
+/* ── Saved pictures carry the board ────────────────────────── */
+/* Save writes an ordinary PNG with the board's strokes tucked into a text chunk, so the same
+   file shares as a picture and opens back into Board. Opening treats the file as untrusted:
+   every stroke goes through the same checks as saved data. */
+const CRC = Array.from({length: 256}, (_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ (n >>> 1) : n >>> 1; return n >>> 0; });
+const crc32 = b => { let c = ~0; for (const x of b) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; };
+const Png = {KEY: 'board',
+  chunks(b) {                                   // [type, start, length] of each chunk; null if not a PNG
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10], dv = new DataView(b.buffer, b.byteOffset, b.byteLength), out = [];
+    if (b.length < 8 || sig.some((x, i) => b[i] !== x)) return null;
+    for (let o = 8; o + 12 <= b.length;) {
+      const len = dv.getUint32(o); if (o + 12 + len > b.length) return null;
+      out.push([String.fromCharCode(...b.subarray(o + 4, o + 8)), o, len]); o += 12 + len;
+    }
+    return out;
+  },
+  async embed(blob, text) {
+    const png = new Uint8Array(await blob.arrayBuffer()), end = this.chunks(png)?.find(c => c[0] === 'IEND');
+    if (!end) return blob;
+    const body = new TextEncoder().encode(this.KEY + '\0' + text), chunk = new Uint8Array(12 + body.length);
+    const dv = new DataView(chunk.buffer);
+    dv.setUint32(0, body.length); chunk.set([116, 69, 88, 116], 4); chunk.set(body, 8);       // "tEXt"
+    dv.setUint32(8 + body.length, crc32(chunk.subarray(4, 8 + body.length)));
+    return new Blob([png.subarray(0, end[1]), chunk, png.subarray(end[1])], {type: 'image/png'});
+  },
+  read(b) {
+    const dec = new TextDecoder('latin1');
+    for (const [type, o, len] of this.chunks(b) || []) {
+      if (type !== 'tEXt') continue;
+      const d = b.subarray(o + 8, o + 8 + len), z = d.indexOf(0);
+      if (z > 0 && dec.decode(d.subarray(0, z)) === this.KEY) return dec.decode(d.subarray(z + 1));
+    }
+    return null;
+  }
+};
+
 function loadBoard() {
   const d = Store.get('board.pages');
   const pages = (Array.isArray(d?.pages) ? d.pages : []).map(pg => (Array.isArray(pg) ? pg : []).map(cleanStroke).filter(Boolean));
@@ -203,8 +239,11 @@ const Board = {
     });
     return new Promise(res => out.toBlob(res, 'image/png'));
   },
+  /* What a saved picture carries: the pages, and the board size they were drawn on. */
+  data() { const r = Ink.cv.getBoundingClientRect();
+    return JSON.stringify({app: 'board', v: 1, w: Math.round(r.width), h: Math.round(r.height), pages: BOARD.pages}); },
   async download() {
-    const blob = await this.image(), d = new Date();
+    const blob = await Png.embed(await this.image(), this.data()), d = new Date();
     const name = `board-${d.toISOString().slice(0, 10)}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
     const file = new File([blob], name, {type: 'image/png'});
     if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({files: [file]})) {
@@ -215,6 +254,35 @@ const Board = {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     return true;
   },
+  /* Open a picture that Board saved, carrying on where it left off. */
+  pick() { Menu.close(); $('open-file').click(); },
+  async open(file) {
+    if (!file) return false;
+    let d = null;
+    try { if (file.size < 50e6) d = JSON.parse(Png.read(new Uint8Array(await file.arrayBuffer()))); } catch {}
+    const pages = d?.app === 'board' && Array.isArray(d.pages) ?
+      d.pages.slice(0, 500).map(pg => (Array.isArray(pg) ? pg : []).map(cleanStroke).filter(Boolean)) : [];
+    if (!pages.length) {
+      alert("This picture has no board in it. Only pictures saved by Board open here, and apps like WhatsApp " +
+        "remove the board when they send a picture, so open the file you saved, not the one you received.");
+      return false;
+    }
+    /* Drawn on a bigger screen? Shrink it to fit this one (never enlarge). */
+    const r = Ink.cv.getBoundingClientRect(), k = d.w > 0 && d.h > 0 ? Math.min(1, r.width / d.w, r.height / d.h) : 1;
+    if (k < 1) for (const pg of pages) for (const s of pg) s.p = s.p.map(([x, y]) => [Math.round(x * k), Math.round(y * k)]);
+    Ink.finish();
+    if (!BOARD.pages.some(p => p.length)) return this.load(pages);
+    /* Something on screen: ask first. The save happens on the button tap, because browsers
+       block a download that no tap or click asked for. */
+    this.pending = pages; $('open-name').textContent = file.name || 'this picture'; $('opener').showModal();
+    return 'asked';
+  },
+  load(pages) { this.pending = null; BOARD = {pages, i: 0}; this.save(); this.show(); return true; },
+  async openPending() {
+    $('opener').close();
+    if (this.pending && await this.download()) this.load(this.pending);
+  },
+  cancelOpen() { this.pending = null; $('opener').close(); },
   fullscreen() {
     (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())?.catch(() => {});
   }
@@ -333,11 +401,16 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-do]'); if (el) run(el.dataset.do, el.dataset.arg);
 });
 
+$('open-file').addEventListener('change', e => { Board.open(e.target.files[0]); e.target.value = ''; });
+/* Drop a saved picture onto the board to open it. */
+$('board').addEventListener('dragover', e => e.preventDefault());
+$('board').addEventListener('drop', e => { e.preventDefault(); Board.open(e.dataTransfer?.files[0]); });
+
 /* Presentation clickers send Page Up / Page Down or the arrow keys. */
 const KEYS = {arrowright: 'Board.next', pagedown: 'Board.next', arrowdown: 'Board.next',
   arrowleft: 'Board.prev', pageup: 'Board.prev', arrowup: 'Board.prev', n: 'Board.add',
   d: 'Ink.pen', l: 'Ink.line', x: 'Ink.duster', e: 'Ink.duster', c: 'Ink.clear', g: 'Bg.cycle', t: 'Clock.toggle',
-  w: 'Theme.toggle', s: 'Board.download', f: 'Board.fullscreen', '?': 'Help.open'};
+  w: 'Theme.toggle', s: 'Board.download', o: 'Board.pick', f: 'Board.fullscreen', '?': 'Help.open'};
 document.addEventListener('keydown', e => {
   if (document.querySelector('dialog[open]')) return;     // a dialog handles its own keys (Esc closes)
   if (e.key === 'Escape') return Menu.close();
@@ -345,6 +418,7 @@ document.addEventListener('keydown', e => {
   if (mod && k === 'z') { e.preventDefault(); return e.shiftKey ? Ink.redo() : Ink.undo(); }
   if (mod && k === 'y') { e.preventDefault(); return Ink.redo(); }
   if (mod && k === 's') { e.preventDefault(); return Board.download(); }
+  if (mod && k === 'o') { e.preventDefault(); return Board.pick(); }
   if (mod || e.altKey) return;
   if (/^[1-4]$/.test(k)) return Ink.pick(k - 1);
   if (k === '[' || k === ']') return Ink.size(Ink.si + (k === ']' ? 1 : -1));
