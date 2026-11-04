@@ -39,7 +39,8 @@ function loadBoard() {
 function loadPrefs() {
   const p = Store.get('board.prefs') || {};
   return {theme: p.theme === 'light' ? 'light' : 'dark', bg: ['grid', 'lines'].includes(p.bg) ? p.bg : 'plain',
-    welcomed: p.welcomed === 2 ? 2 : 0};  // 2 = has seen the drawing-board welcome (kept as 2, so saving prefs keeps it)
+    welcomed: p.welcomed === 2 ? 2 : 0,   // 2 = has seen the drawing-board welcome (kept as 2, so saving prefs keeps it)
+    tipped: p.tipped === true};           // has seen the "out of room? new page" tip
 }
 let BOARD = loadBoard(), PREFS = loadPrefs();
 const savePrefs = () => Store.set('board.prefs', PREFS);
@@ -120,7 +121,7 @@ const Ink = {mode: 'pen', ci: 0, si: 1, live: new Map(), penSeen: false, cols: [
   finish(type, id) {
     for (const [k, l] of this.live) {
       if (id !== undefined ? k !== id : type && l.type !== type) continue;
-      this.live.delete(k); this.record({add: l.s}); Board.saveSoon();
+      this.live.delete(k); this.record({add: l.s}); Board.saveSoon(); Tip.maybe(l.s);
     }
   },
   changed() { this.redraw(); Board.save(); },
@@ -161,7 +162,7 @@ const Board = {
   /* Changing page closes any stroke still open: one stuck contact must never lock the board. */
   go(i) {
     if (!(i >= 0 && i < BOARD.pages.length)) return;
-    Ink.finish(); BOARD.i = i; this.save(); this.show();
+    Ink.finish(); Tip.hide(); BOARD.i = i; this.save(); this.show();
   },
   prev() { this.go(BOARD.i - 1); },
   /* Moving on from the last page gives a fresh one, but never piles up empty pages. */
@@ -281,6 +282,21 @@ const Help = {
 };
 $('help').addEventListener('close', () => { PREFS.welcomed = 2; savePrefs(); });
 
+/* ── Pages, not an endless canvas ──────────────────────────── */
+/* People used to endless canvases try to scroll for more room. The first time someone writes
+   up against the edge, one quiet tip shows where more room is; then never again on this device. */
+const Tip = {h: null,
+  maybe(s) {
+    const W = Ink.cv.clientWidth, H = Ink.cv.clientHeight, m = 60 * BIG;
+    if (PREFS.tipped || s.c < 0 || !s.p.some(([x, y]) => x > W - m || y > H - m)) return;
+    PREFS.tipped = true; savePrefs();
+    $('tip').style.bottom = $('bar').offsetHeight + 8 + 'px';
+    $('tip').classList.remove('hidden');
+    clearTimeout(this.h); this.h = setTimeout(() => this.hide(), 8000);
+  },
+  hide() { $('tip').classList.add('hidden'); }
+};
+
 /* ── Back after a break ─────────────────────────────────────── */
 const Resume = {
   /* Ask only when there is something on the board and it has sat untouched for a while. */
@@ -310,7 +326,7 @@ const Menu = {
 /* ── Buttons and keys ──────────────────────────────────────── */
 /* Buttons carry data-do="Object.method" (and optional data-arg); no inline handlers,
    so the page can forbid inline script entirely. */
-const ACTIONS = {Board, Ink, Theme, Bg, Clock, App, Help, Menu, Resume};
+const ACTIONS = {Board, Ink, Theme, Bg, Clock, App, Help, Menu, Resume, Tip};
 const run = (act, arg) => { const [o, m] = act.split('.'); ACTIONS[o]?.[m]?.(arg); };
 document.addEventListener('click', e => {
   if (!e.target.closest('#more, #more-btn')) Menu.close();                // a click anywhere else closes the menu

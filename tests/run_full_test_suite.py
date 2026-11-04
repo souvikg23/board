@@ -511,6 +511,37 @@ def test_back_after_break():
 run_test("12g. Back After a Break", test_back_after_break)
 
 # ─────────────────────────────────────────────────────────────
+# TEST 12h: Writing up against the edge shows, once, where more room is
+# ─────────────────────────────────────────────────────────────
+def test_out_of_room_tip():
+    tip = driver.find_element(By.ID, "tip")
+    js("PREFS.tipped = false; Board.add();")
+    h = canvas().size['height']
+    stroke([(200, 200), (300, 220)])                          # middle of the board: no tip
+    assert not tip.is_displayed(), "Tip shown for writing in the middle of the board"
+    js("Ink.mode = 'duster';"); stroke([(200, h - 20), (300, h - 20)]); js("Ink.mode = 'pen';")
+    assert not tip.is_displayed(), "Tip shown for rubbing out near the edge"
+    stroke([(200, h - 20), (300, h - 25)])                    # up against the bottom edge
+    assert tip.is_displayed(), "No tip when writing reached the edge"
+    assert js("return JSON.parse(localStorage.getItem('board.prefs')).tipped;") is True, "Tip not remembered"
+    ActionChains(driver).move_to_element_with_offset(tip, -tip.size['width'] // 2 + 8, 0).click().perform()
+    assert not tip.is_displayed(), "Tapping the tip did not close it"
+    stroke([(200, h - 20), (300, h - 25)])
+    assert not tip.is_displayed(), "Tip shown a second time"
+    js("PREFS.tipped = false;"); stroke([(200, h - 20), (300, h - 25)])
+    assert tip.is_displayed()
+    pages = js("return BOARD.pages.length;")
+    driver.find_element(By.CSS_SELECTOR, "#tip [data-do='Board.add']").click()
+    assert js("return [BOARD.pages.length, Ink.strokes.length];") == [pages + 1, 0], "The tip's New page button did not give a fresh page"
+    assert not tip.is_displayed(), "Tip stayed up after the user found the pages"
+    js("Board.remove(); Board.prev();")
+    driver.refresh(); time.sleep(0.8)
+    assert js("return PREFS.tipped;") is True and not driver.find_element(By.ID, "tip").is_displayed(), "Tip came back after a reload"
+    js("window.confirm = () => true; Board.next(); Board.remove();")
+
+run_test("12h. Out-of-Room Tip", test_out_of_room_tip)
+
+# ─────────────────────────────────────────────────────────────
 # TEST 13: Offline service worker
 # ─────────────────────────────────────────────────────────────
 def test_service_worker():
