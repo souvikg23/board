@@ -46,3 +46,7 @@ python -m http.server 8080          # in this folder
 python tests/run_full_test_suite.py # needs: pip install selenium, plus Chrome
 ```
 Pass a different URL as the first argument to test the live site.
+
+## Licence
+Copyright © 2026 Souvik Ghosh. All rights reserved. The hosted app is free to use; the code may not be
+copied, modified or redistributed without written permission. See [LICENSE](LICENSE).

@@ -1,4 +1,5 @@
 /* Board — a blank teaching board. No dependencies, no build step, no network.
+   Copyright (c) 2026 Souvik Ghosh. All rights reserved. See LICENSE.
    Everything the user makes stays in this browser (localStorage).
    Security: nothing the user stores is ever put into the page as HTML; saved data is
    validated on load, and the page's Content-Security-Policy forbids inline script. */
