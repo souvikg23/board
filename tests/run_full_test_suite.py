@@ -582,6 +582,11 @@ def test_open_saved_board():
     want = js("return BOARD.pages;")
     before = snapshot(); press("s")
     saved = newest_download(before)
+    import re, datetime
+    stamp = re.fullmatch(r'board-(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)(\d\d)\.png', os.path.basename(saved))
+    assert stamp, f"Saved name should carry the local date and time to the second: {os.path.basename(saved)}"
+    when = datetime.datetime(*map(int, stamp.groups()))
+    assert abs((datetime.datetime.now() - when).total_seconds()) < 120, f"Saved name is not this device's local time: {when}"
     chunks = png_chunks(saved)
     assert chunks[0] == 'IHDR' and chunks[-1] == 'IEND' and 'tEXt' in chunks, f"Board data not stored in the picture: {chunks}"
     assert js("""return new Promise(r => { const i = new Image(); i.onload = () => r(i.width > 0); i.onerror = () => r(false);

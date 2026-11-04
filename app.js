@@ -244,7 +244,8 @@ const Board = {
     return JSON.stringify({app: 'board', v: 1, w: Math.round(r.width), h: Math.round(r.height), pages: BOARD.pages}); },
   async download() {
     const blob = await Png.embed(await this.image(), this.data()), d = new Date();
-    const name = `board-${d.toISOString().slice(0, 10)}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
+    const two = n => String(n).padStart(2, '0');            // local date and time, to the second, so saves never collide
+    const name = `board-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}.png`;
     const file = new File([blob], name, {type: 'image/png'});
     if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({files: [file]})) {
       try { await navigator.share({files: [file]}); return true; } catch (e) { if (e.name === 'AbortError') return false; }
